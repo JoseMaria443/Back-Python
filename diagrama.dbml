@@ -1,0 +1,183 @@
+// =========================================================
+// DIAGRAMA - Sistema de Gestion de Comunicados
+// Formato: DBML (para importar en dbdiagram.io)
+// Motor de referencia: PostgreSQL
+// =========================================================
+// NOTA: Solo se formalizan relaciones para columnas que son
+// INT/id segun lo indicado, el resto de nombres son ejemplo.
+// =========================================================
+
+
+// =========================================================
+// TABLA: Comunicado (antes "Oficio")
+// =========================================================
+Table Comunicado {
+  IdComunicado integer [pk, increment]
+  DOI varchar(255) [not null]
+  NumComunicado varchar(255) [not null]
+  IdEmisor integer [not null]
+  FechaRecepcion date [not null]
+  IdDestinatario integer [not null]
+  FechaRegistro date [not null]
+  IdRegistro integer [not null]
+  IdMetodoRecepcion integer [not null, note: 'FK -> Catalogo.IdCatalogo (TipoCatalogo = MetodoRecepcion)']
+  Tema varchar(255) [not null]
+  Observaciones text
+  IdTipoComunicado integer [not null, note: 'FK -> Catalogo.IdCatalogo (TipoCatalogo = TipoComunicado)']
+  IdArchivo integer [note: 'Viene de la tabla duplicada que se elimino']
+
+  Note: 'Comunicado: sin observaciones nuevas, version corregida (duplicado fusionado).'
+}
+
+
+// =========================================================
+// TABLA: Tarea
+// =========================================================
+Table Tarea {
+  IdTarea integer [pk, increment]
+  IdComunicado integer [not null]
+  Descripcion text [not null]
+  FechaEntrega date [not null]
+  FechaRegistro date [not null]
+
+  Note: 'Tarea: sin observaciones nuevas, queda igual.'
+}
+
+
+// =========================================================
+// TABLA: Comunicado_Destinatario (asociativa)
+// =========================================================
+Table Comunicado_Destinatario {
+  IdComunicado integer [not null]
+  IdDestinatario integer [not null]
+  IdRolDestinatario integer [not null, note: 'FK -> Catalogo.IdCatalogo (Principal, Con copia, Informativo)']
+
+  Note: 'Asociativa Comunicado <-> Destinatario, con rol del destinatario.'
+}
+
+
+// =========================================================
+// OBSERVACION (pizarra): TipoComunicado, MetodoRecepcion y
+// RolDestinatario tenian casi los mismos campos (Id +
+// Descripcion). Se fusionan en un catalogo generico.
+// =========================================================
+Table TipoCatalogo {
+  IdTipoCatalogo integer [pk, increment]
+  NombreTipoCatalogo varchar(100) [not null, note: 'Ej: TipoComunicado, MetodoRecepcion, RolDestinatario']
+
+  Note: 'Define a que tipo de catalogo pertenece cada fila de Catalogo.'
+}
+
+Table Catalogo {
+  IdCatalogo integer [pk, increment]
+  IdTipoCatalogo integer [not null]
+  Descripcion varchar(255) [not null, note: 'Ej: Oficio, Papel, Principal, etc segun TipoCatalogo']
+
+  Note: 'DECISION FINAL: sustituye a TipoComunicado, MetodoRecepcion y RolDestinatario por separado.'
+}
+
+
+// =========================================================
+// TABLA: Empleado
+// =========================================================
+Table Empleado {
+  IdEmpleado integer [pk, increment]
+  IdArea integer [not null]
+  IdCargo integer [not null]
+
+  Note: 'Empleado: sin observaciones nuevas, queda igual.'
+}
+
+
+// =========================================================
+// TABLA: EmpCargo
+// =========================================================
+Table EmpCargo {
+  IdEmpleado integer [not null]
+  IdCargo integer [not null]
+  FechaInicio date [not null]
+  FechaTermina date [not null, note: 'Pendiente: deberia permitir NULL para cargos vigentes']
+  IdRegistroModificacion integer [not null]
+
+  Note: 'EmpCargo: sin observaciones nuevas en esta sesion.'
+}
+
+
+// =========================================================
+// TABLA: Tarea_Responsable (asociativa)
+// =========================================================
+Table Tarea_Responsable {
+  IdTarea integer [not null]
+  IdResponsable integer [not null, note: 'FK -> Empleado.IdEmpleado']
+  IdRol integer [not null]
+
+  Note: 'Asociativa Tarea <-> Empleado, con rol del responsable.'
+}
+
+
+// =========================================================
+// TABLA: Archivo (antes "Evidencia" / "ARCHIVO_EVIDENCIA")
+// =========================================================
+Table Archivo {
+  IdArchivo integer [pk, increment]
+  DOI varchar(255) [not null]
+  Descripcion text [not null]
+  UrlArchivo varchar(500) [not null, note: 'NUEVO, tomado de la imagen ARCHIVO_EVIDENCIA']
+  NombreOriginal varchar(255) [not null, note: 'NUEVO, tomado de la imagen ARCHIVO_EVIDENCIA']
+  IdElaborador integer [not null, note: 'FK -> Empleado.IdEmpleado']
+  FechaRegistro date [not null]
+
+  Note: 'Archivo: generaliza Comunicados y Evidencias (antes Evidencia).'
+}
+
+
+// =========================================================
+// TABLA: Tarea_Archivo (asociativa, antes "TAREA_EVIDENCIA")
+// =========================================================
+Table Tarea_Archivo {
+  IdTarea integer [not null]
+  IdArchivo integer [not null]
+
+  Note: 'Asociativa Tarea <-> Archivo. Ya estaba bien planteada, solo cambio de nombre.'
+}
+
+
+// =========================================================
+// CATALOGO: Estado
+// =========================================================
+// Pendiente de definir estructura formal. Se deja aparte de
+// Catalogo/TipoCatalogo porque aun no se confirma si comparte
+// el mismo patron o necesita columnas propias (a que entidad
+// aplica cada estado).
+// =========================================================
+Table Estado {
+  IdEstado integer [pk, increment]
+  NombreEstado varchar(100) [not null, note: 'Asignado, Cancelado, Pospuesta, Entregada, Revisada, Rechazada, Terminada/Completada, Retrasada']
+
+  Note: 'PENDIENTE: estructura definitiva aun no confirmada.'
+}
+
+
+// =========================================================
+// RELACIONES (Ref)
+// =========================================================
+
+Ref: Tarea.IdComunicado > Comunicado.IdComunicado
+Ref: Comunicado.IdArchivo > Archivo.IdArchivo
+
+Ref: Comunicado_Destinatario.IdComunicado > Comunicado.IdComunicado
+Ref: Comunicado_Destinatario.IdRolDestinatario > Catalogo.IdCatalogo
+
+Ref: Comunicado.IdMetodoRecepcion > Catalogo.IdCatalogo
+Ref: Comunicado.IdTipoComunicado > Catalogo.IdCatalogo
+Ref: Catalogo.IdTipoCatalogo > TipoCatalogo.IdTipoCatalogo
+
+Ref: EmpCargo.IdEmpleado > Empleado.IdEmpleado
+
+Ref: Tarea_Responsable.IdTarea > Tarea.IdTarea
+Ref: Tarea_Responsable.IdResponsable > Empleado.IdEmpleado
+
+Ref: Archivo.IdElaborador > Empleado.IdEmpleado
+
+Ref: Tarea_Archivo.IdTarea > Tarea.IdTarea
+Ref: Tarea_Archivo.IdArchivo > Archivo.IdArchivo

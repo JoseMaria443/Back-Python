@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sistema-gestion-comunicados"
+version = "0.1.0"
+description = "Sistema de Gestión de Comunicados - Arquitectura Hexagonal"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn==0.24.0",
+    "sqlalchemy==2.0.23",
+    "psycopg2-binary==2.9.9",
+    "alembic==1.12.1",
+    "bcrypt==4.1.1",
+    "pyjwt==2.8.1",
+    "python-dotenv==1.0.0",
+    "pydantic==2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-cov==4.1.0",
+    "black==23.12.0",
+    "ruff==0.1.8",
+    "mypy==1.7.1",
+]

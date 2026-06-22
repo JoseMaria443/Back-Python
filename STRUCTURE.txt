@@ -1,0 +1,92 @@
+proyecto-gestion-comunicados/
+│
+├── src/
+│   ├── __init__.py
+│   ├── main.py
+│   │
+│   ├── domain/                           # Capa de Dominio
+│   │   ├── __init__.py
+│   │   ├── entities/
+│   │   │   ├── __init__.py
+│   │   │   ├── comunicado/
+│   │   │   │   └── __init__.py           # Entidades de Comunicado
+│   │   │   ├── tarea/
+│   │   │   │   └── __init__.py           # Entidades de Tarea
+│   │   │   ├── archivo/
+│   │   │   │   └── __init__.py           # Entidades de Archivo
+│   │   │   ├── empleado/
+│   │   │   │   └── __init__.py           # Entidades de Empleado
+│   │   │   └── catalogo/
+│   │   │       └── __init__.py           # Catálogos (Estados, Roles, Cargos)
+│   │   ├── value_objects/
+│   │   │   └── __init__.py               # Value Objects
+│   │   ├── ports/                        # Interfaces/Puertos
+│   │   │   ├── __init__.py
+│   │   │   ├── input/
+│   │   │   │   └── __init__.py           # Puertos de entrada (casos de uso)
+│   │   │   └── output/
+│   │   │       └── __init__.py           # Puertos de salida (persistencia, etc)
+│   │   └── exceptions/
+│   │       └── __init__.py               # Excepciones de dominio
+│   │
+│   ├── application/                      # Capa de Aplicación
+│   │   ├── __init__.py
+│   │   ├── use_cases/
+│   │   │   ├── __init__.py
+│   │   │   ├── comunicado/
+│   │   │   │   └── __init__.py           # Casos de uso de Comunicado
+│   │   │   ├── tarea/
+│   │   │   │   └── __init__.py           # Casos de uso de Tarea
+│   │   │   ├── archivo/
+│   │   │   │   └── __init__.py           # Casos de uso de Archivo
+│   │   │   └── empleado/
+│   │   │       └── __init__.py           # Casos de uso de Empleado
+│   │   ├── dtos/
+│   │   │   └── __init__.py               # Data Transfer Objects
+│   │   └── services/
+│   │       └── __init__.py               # Servicios de aplicación
+│   │
+│   └── infrastructure/                   # Capa de Infraestructura
+│       ├── __init__.py
+│       ├── adapters/
+│       │   ├── __init__.py
+│       │   ├── entry/                    # Adaptadores de ENTRADA
+│       │   │   ├── __init__.py
+│       │   │   └── web/
+│       │   │       ├── __init__.py
+│       │   │       ├── routes/           # Rutas FastAPI
+│       │   │       ├── schemas/          # Esquemas Pydantic
+│       │   │       └── dependencies/     # Dependencias de inyección
+│       │   ├── output/                   # Adaptadores de SALIDA
+│       │   │   ├── __init__.py
+│       │   │   ├── persistence/
+│       │   │   │   └── __init__.py       # Configuración BD (MySQL, etc)
+│       │   │   └── repositories/
+│       │   │       └── __init__.py       # Implementaciones de repositorios
+│       │   └── ai_provider/              # Adaptador IA (genérico, sin vendor-lock)
+│       │       └── __init__.py           # Integración Gemini/IA futura
+│       └── config/
+│           └── __init__.py               # settings.py, env vars
+│
+├── tests/
+│   ├── __init__.py
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── domain/
+│   │   │   └── __init__.py               # Tests unitarios de dominio
+│   │   └── application/
+│   │       └── __init__.py               # Tests unitarios de aplicación
+│   └── integration/
+│       ├── __init__.py
+│       ├── infrastructure/
+│       │   └── __init__.py               # Tests integración infraestructura
+│       └── adapters/
+│           └── __init__.py               # Tests integración adaptadores
+│
+├── .env.example                          # Variables de entorno (plantilla)
+├── .gitignore                            # Ignorar archivos
+├── README.md                             # Documentación
+├── requirements.txt                      # Dependencias (pip)
+├── pyproject.toml                        # Configuración proyecto (Poetry/setuptools)
+└── docker-compose.yml                    # Orquestación Docker (BD, etc)
+
