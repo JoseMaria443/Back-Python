@@ -11,13 +11,8 @@ from pathlib import Path
 # Agregar src al path para importar modelos
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.infrastructure.adapters.output.persistence.empleado import Base as EmpleadoBase
-from src.infrastructure.adapters.output.persistence.comunicado import Base as ComunicadoBase
-from src.infrastructure.adapters.output.persistence.tarea import Base as TareaBase
-from src.infrastructure.adapters.output.persistence.rol_destinatario import Base as RolDestinatarioBase
-from src.infrastructure.adapters.output.persistence.rol_responsable import Base as RolResponsableBase
-from src.infrastructure.adapters.output.persistence.estado_tarea import Base as EstadoTareaBase
-from src.infrastructure.adapters.output.persistence.estado import Base as EstadoBase
+# Importar el Base compartido (único para todos los modelos ORM)
+from src.infrastructure.adapters.output.persistence.base import Base
 
 # this is the Alembic Config object, which provides
 # the values of the [alembic] section of the setup.cfg file in addition to the
@@ -40,7 +35,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = EmpleadoBase.metadata
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

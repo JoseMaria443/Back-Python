@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from .base import Base
 
 
 class ComunicadoORM(Base):
