@@ -19,3 +19,15 @@ class EmailYaExisteException(DomainException):
 class EmpleadoNoEncontradoException(DomainException):
     """Se lanza cuando no se encuentra un empleado."""
     pass
+
+
+from .crud_exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+
+__all__ = [
+    "DomainException",
+    "CredencialesInvalidasException",
+    "EmailYaExisteException",
+    "EmpleadoNoEncontradoException",
+    "RecursoNoEncontradoException",
+    "AsociacionYaExisteException",
+]
