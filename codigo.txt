@@ -1,0 +1,5325 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.application.dtos.comunicado import (
+    CreateComunicadoRequest,
+    UpdateComunicadoRequest,
+    ComunicadoResponse,
+    ListComunicadoResponse,
+)
+from src.application.dtos.comunicado_destinatario import (
+    AsociarComunicadoDestinatarioRequest,
+    ComunicadoDestinatarioResponse,
+)
+from src.application.dtos.comunicado_adjunto import (
+    AsociarComunicadoAdjuntoRequest,
+    ComunicadoAdjuntoResponse,
+)
+from src.application.use_cases.comunicado import (
+    CreateComunicadoUseCase,
+    GetComunicadoUseCase,
+    ListComunicadoUseCase,
+    UpdateComunicadoUseCase,
+    DeleteComunicadoUseCase,
+)
+from src.application.use_cases.comunicado_destinatario import (
+    AsociarComunicadoDestinatarioUseCase,
+    DesasociarComunicadoDestinatarioUseCase,
+)
+from src.application.use_cases.comunicado_adjunto import (
+    AsociarComunicadoAdjuntoUseCase,
+    DesasociarComunicadoAdjuntoUseCase,
+)
+from src.infrastructure.adapters.output.repositories.comunicado_repository import ComunicadoRepository
+from src.infrastructure.adapters.output.repositories.comunicado_destinatario_repository import (
+    ComunicadoDestinatarioRepository,
+)
+from src.infrastructure.adapters.output.repositories.comunicado_adjunto_repository import (
+    ComunicadoAdjuntoRepository,
+)
+from src.infrastructure.adapters.output.repositories.archivo_repository import ArchivoRepository
+
+router = APIRouter(prefix="/api/comunicado", tags=["comunicado"])
+
+
+def _to_response(entity) -> ComunicadoResponse:
+    return ComunicadoResponse(
+        id_comunicado=entity.id_comunicado,
+        doi=entity.doi,
+        num_comunicado=entity.num_comunicado,
+        id_emisor=entity.id_emisor,
+        fecha_recepcion=entity.fecha_recepcion,
+        id_destinatario=entity.id_destinatario,
+        fecha_registro=entity.fecha_registro,
+        id_registro=entity.id_registro,
+        id_metodo_recepcion=entity.id_metodo_recepcion,
+        tema=entity.tema,
+        id_tipo_comunicado=entity.id_tipo_comunicado,
+        observaciones=entity.observaciones,
+    )
+
+
+@router.post("/", response_model=ComunicadoResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateComunicadoRequest, db: Session = Depends(get_db)):
+    repo = ComunicadoRepository(db)
+    use_case = CreateComunicadoUseCase(repo)
+    entity = use_case.ejecutar(
+        request.doi,
+        request.num_comunicado,
+        request.id_emisor,
+        request.fecha_recepcion,
+        request.id_destinatario,
+        request.fecha_registro,
+        request.id_registro,
+        request.id_metodo_recepcion,
+        request.tema,
+        request.id_tipo_comunicado,
+        request.observaciones,
+    )
+    return _to_response(entity)
+
+
+@router.get("/{id_comunicado}", response_model=ComunicadoResponse)
+def obtener(id_comunicado: int, db: Session = Depends(get_db)):
+    try:
+        repo = ComunicadoRepository(db)
+        use_case = GetComunicadoUseCase(repo)
+        entity = use_case.ejecutar(id_comunicado)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListComunicadoResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = ComunicadoRepository(db)
+    use_case = ListComunicadoUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListComunicadoResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_comunicado}", response_model=ComunicadoResponse)
+def actualizar(
+    id_comunicado: int,
+    request: UpdateComunicadoRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ComunicadoRepository(db)
+        use_case = UpdateComunicadoUseCase(repo)
+        entity = use_case.ejecutar(
+            id_comunicado,
+            request.doi,
+            request.num_comunicado,
+            request.id_emisor,
+            request.fecha_recepcion,
+            request.id_destinatario,
+            request.fecha_registro,
+            request.id_registro,
+            request.id_metodo_recepcion,
+            request.tema,
+            request.id_tipo_comunicado,
+            request.observaciones,
+        )
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_comunicado}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_comunicado: int, db: Session = Depends(get_db)):
+    try:
+        repo = ComunicadoRepository(db)
+        use_case = DeleteComunicadoUseCase(repo)
+        use_case.ejecutar(id_comunicado)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/{id_comunicado}/destinatarios",
+    response_model=ComunicadoDestinatarioResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def asociar_destinatario(
+    id_comunicado: int,
+    request: AsociarComunicadoDestinatarioRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ComunicadoDestinatarioRepository(db)
+        comunicado_repo = ComunicadoRepository(db)
+        use_case = AsociarComunicadoDestinatarioUseCase(repo, comunicado_repo)
+        entity = use_case.ejecutar(
+            id_comunicado,
+            request.id_destinatario,
+            request.id_rol_destinatario,
+        )
+        return ComunicadoDestinatarioResponse(
+            id_comunicado=entity.id_comunicado,
+            id_destinatario=entity.id_destinatario,
+            id_rol_destinatario=entity.id_rol_destinatario,
+        )
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AsociacionYaExisteException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{id_comunicado}/destinatarios/{id_destinatario}", status_code=status.HTTP_204_NO_CONTENT)
+def desasociar_destinatario(
+    id_comunicado: int,
+    id_destinatario: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ComunicadoDestinatarioRepository(db)
+        use_case = DesasociarComunicadoDestinatarioUseCase(repo)
+        use_case.ejecutar(id_comunicado, id_destinatario)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/{id_comunicado}/adjuntos",
+    response_model=ComunicadoAdjuntoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def asociar_adjunto(
+    id_comunicado: int,
+    request: AsociarComunicadoAdjuntoRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ComunicadoAdjuntoRepository(db)
+        comunicado_repo = ComunicadoRepository(db)
+        archivo_repo = ArchivoRepository(db)
+        use_case = AsociarComunicadoAdjuntoUseCase(repo, comunicado_repo, archivo_repo)
+        entity = use_case.ejecutar(id_comunicado, request.id_archivo)
+        return ComunicadoAdjuntoResponse(
+            id_comunicado=entity.id_comunicado,
+            id_archivo=entity.id_archivo,
+        )
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AsociacionYaExisteException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{id_comunicado}/adjuntos/{id_archivo}", status_code=status.HTTP_204_NO_CONTENT)
+def desasociar_adjunto(
+    id_comunicado: int,
+    id_archivo: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ComunicadoAdjuntoRepository(db)
+        use_case = DesasociarComunicadoAdjuntoUseCase(repo)
+        use_case.ejecutar(id_comunicado, id_archivo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+"""Adaptador FastAPI para endpoints de Empleado."""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import (
+    CredencialesInvalidasException,
+    EmailYaExisteException,
+)
+from src.application.dtos.empleado import (
+    LoginRequest,
+    LoginResponse,
+    CreateEmpleadoRequest,
+    CreateEmpleadoResponse,
+)
+from src.application.use_cases.empleado import LoginUseCase, CreateEmpleadoUseCase
+from src.infrastructure.adapters.output.repositories.empleado_repository import (
+    EmpleadoRepository,
+)
+
+router = APIRouter(prefix="/api/empleado", tags=["empleado"])
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    """Endpoint de login.
+    
+    Recibe email y password, retorna JWT si son válidos.
+    """
+    try:
+        # Inyectar dependencias y ejecutar caso de uso
+        repositorio = EmpleadoRepository(db)
+        use_case = LoginUseCase(repositorio)
+        
+        token, id_empleado, nombre = use_case.ejecutar(request.email, request.password)
+        
+        return LoginResponse(
+            token=token,
+            token_type="bearer",
+            id_empleado=id_empleado,
+            email=request.email,
+            nombre=nombre,
+        )
+    
+    except CredencialesInvalidasException:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Las credenciales proporcionadas son inválidas.",
+        )
+
+
+@router.post("/crear", response_model=CreateEmpleadoResponse)
+def crear_empleado(request: CreateEmpleadoRequest, db: Session = Depends(get_db)):
+    """Endpoint para crear empleado (admin only en esta fase).
+    
+    NOTA: En producción, este endpoint debe estar protegido por autenticación
+    y autorización de administrador.
+    """
+    try:
+        # Inyectar dependencias y ejecutar caso de uso
+        repositorio = EmpleadoRepository(db)
+        use_case = CreateEmpleadoUseCase(repositorio)
+        
+        empleado = use_case.ejecutar(
+            nombre=request.nombre,
+            email=request.email,
+            password=request.password,
+            id_area=request.id_area,
+            id_cargo=request.id_cargo,
+        )
+        
+        return CreateEmpleadoResponse(
+            id_empleado=empleado.id_empleado,
+            nombre=empleado.nombre,
+            email=empleado.email,
+            id_area=empleado.id_area,
+            id_cargo=empleado.id_cargo,
+        )
+    
+    except EmailYaExisteException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.estado_tarea import (
+    CreateEstadoTareaRequest,
+    UpdateEstadoTareaRequest,
+    EstadoTareaResponse,
+    ListEstadoTareaResponse,
+)
+from src.application.use_cases.estado_tarea import (
+    CreateEstadoTareaUseCase,
+    GetEstadoTareaUseCase,
+    ListEstadoTareaUseCase,
+    UpdateEstadoTareaUseCase,
+    DeleteEstadoTareaUseCase,
+)
+from src.infrastructure.adapters.output.repositories.estado_tarea_repository import (
+    EstadoTareaRepository,
+)
+
+router = APIRouter(prefix="/api/estado-tarea", tags=["estado-tarea"])
+
+
+def _to_response(entity) -> EstadoTareaResponse:
+    return EstadoTareaResponse(
+        id_estado_tarea=entity.id_estado_tarea,
+        nombre_estado=entity.nombre_estado,
+    )
+
+
+@router.post("/", response_model=EstadoTareaResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateEstadoTareaRequest, db: Session = Depends(get_db)):
+    repo = EstadoTareaRepository(db)
+    use_case = CreateEstadoTareaUseCase(repo)
+    entity = use_case.ejecutar(request.nombre_estado)
+    return _to_response(entity)
+
+
+@router.get("/{id_estado_tarea}", response_model=EstadoTareaResponse)
+def obtener(id_estado_tarea: int, db: Session = Depends(get_db)):
+    try:
+        repo = EstadoTareaRepository(db)
+        use_case = GetEstadoTareaUseCase(repo)
+        entity = use_case.ejecutar(id_estado_tarea)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListEstadoTareaResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = EstadoTareaRepository(db)
+    use_case = ListEstadoTareaUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListEstadoTareaResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_estado_tarea}", response_model=EstadoTareaResponse)
+def actualizar(
+    id_estado_tarea: int,
+    request: UpdateEstadoTareaRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = EstadoTareaRepository(db)
+        use_case = UpdateEstadoTareaUseCase(repo)
+        entity = use_case.ejecutar(id_estado_tarea, request.nombre_estado)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_estado_tarea}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_estado_tarea: int, db: Session = Depends(get_db)):
+    try:
+        repo = EstadoTareaRepository(db)
+        use_case = DeleteEstadoTareaUseCase(repo)
+        use_case.ejecutar(id_estado_tarea)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.tipo_catalogo import (
+    CreateTipoCatalogoRequest,
+    UpdateTipoCatalogoRequest,
+    TipoCatalogoResponse,
+    ListTipoCatalogoResponse,
+)
+from src.application.use_cases.tipo_catalogo import (
+    CreateTipoCatalogoUseCase,
+    GetTipoCatalogoUseCase,
+    ListTipoCatalogoUseCase,
+    UpdateTipoCatalogoUseCase,
+    DeleteTipoCatalogoUseCase,
+)
+from src.infrastructure.adapters.output.repositories.tipo_catalogo_repository import (
+    TipoCatalogoRepository,
+)
+
+router = APIRouter(prefix="/api/tipo-catalogo", tags=["tipo-catalogo"])
+
+
+def _to_response(entity) -> TipoCatalogoResponse:
+    return TipoCatalogoResponse(
+        id_tipo_catalogo=entity.id_tipo_catalogo,
+        nombre_tipo_catalogo=entity.nombre_tipo_catalogo,
+    )
+
+
+@router.post("/", response_model=TipoCatalogoResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateTipoCatalogoRequest, db: Session = Depends(get_db)):
+    repo = TipoCatalogoRepository(db)
+    use_case = CreateTipoCatalogoUseCase(repo)
+    entity = use_case.ejecutar(request.nombre_tipo_catalogo)
+    return _to_response(entity)
+
+
+@router.get("/{id_tipo_catalogo}", response_model=TipoCatalogoResponse)
+def obtener(id_tipo_catalogo: int, db: Session = Depends(get_db)):
+    try:
+        repo = TipoCatalogoRepository(db)
+        use_case = GetTipoCatalogoUseCase(repo)
+        entity = use_case.ejecutar(id_tipo_catalogo)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListTipoCatalogoResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = TipoCatalogoRepository(db)
+    use_case = ListTipoCatalogoUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListTipoCatalogoResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_tipo_catalogo}", response_model=TipoCatalogoResponse)
+def actualizar(
+    id_tipo_catalogo: int,
+    request: UpdateTipoCatalogoRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = TipoCatalogoRepository(db)
+        use_case = UpdateTipoCatalogoUseCase(repo)
+        entity = use_case.ejecutar(id_tipo_catalogo, request.nombre_tipo_catalogo)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_tipo_catalogo}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_tipo_catalogo: int, db: Session = Depends(get_db)):
+    try:
+        repo = TipoCatalogoRepository(db)
+        use_case = DeleteTipoCatalogoUseCase(repo)
+        use_case.ejecutar(id_tipo_catalogo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.catalogo import (
+    CreateCatalogoRequest,
+    UpdateCatalogoRequest,
+    CatalogoResponse,
+    ListCatalogoResponse,
+)
+from src.application.use_cases.catalogo import (
+    CreateCatalogoUseCase,
+    GetCatalogoUseCase,
+    ListCatalogoUseCase,
+    UpdateCatalogoUseCase,
+    DeleteCatalogoUseCase,
+)
+from src.infrastructure.adapters.output.repositories.catalogo_repository import CatalogoRepository
+
+router = APIRouter(prefix="/api/catalogo", tags=["catalogo"])
+
+
+def _to_response(entity) -> CatalogoResponse:
+    return CatalogoResponse(
+        id_catalogo=entity.id_catalogo,
+        id_tipo_catalogo=entity.id_tipo_catalogo,
+        descripcion=entity.descripcion,
+    )
+
+
+@router.post("/", response_model=CatalogoResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateCatalogoRequest, db: Session = Depends(get_db)):
+    repo = CatalogoRepository(db)
+    use_case = CreateCatalogoUseCase(repo)
+    entity = use_case.ejecutar(request.id_tipo_catalogo, request.descripcion)
+    return _to_response(entity)
+
+
+@router.get("/{id_catalogo}", response_model=CatalogoResponse)
+def obtener(id_catalogo: int, db: Session = Depends(get_db)):
+    try:
+        repo = CatalogoRepository(db)
+        use_case = GetCatalogoUseCase(repo)
+        entity = use_case.ejecutar(id_catalogo)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListCatalogoResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = CatalogoRepository(db)
+    use_case = ListCatalogoUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListCatalogoResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_catalogo}", response_model=CatalogoResponse)
+def actualizar(
+    id_catalogo: int,
+    request: UpdateCatalogoRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = CatalogoRepository(db)
+        use_case = UpdateCatalogoUseCase(repo)
+        entity = use_case.ejecutar(id_catalogo, request.id_tipo_catalogo, request.descripcion)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_catalogo}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_catalogo: int, db: Session = Depends(get_db)):
+    try:
+        repo = CatalogoRepository(db)
+        use_case = DeleteCatalogoUseCase(repo)
+        use_case.ejecutar(id_catalogo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.application.dtos.tarea import (
+    CreateTareaRequest,
+    UpdateTareaRequest,
+    TareaResponse,
+    ListTareaResponse,
+)
+from src.application.dtos.tarea_responsable import (
+    AsociarTareaResponsableRequest,
+    TareaResponsableResponse,
+)
+from src.application.dtos.tarea_archivo import (
+    AsociarTareaArchivoRequest,
+    TareaArchivoResponse,
+)
+from src.application.use_cases.tarea import (
+    CreateTareaUseCase,
+    GetTareaUseCase,
+    ListTareaUseCase,
+    UpdateTareaUseCase,
+    DeleteTareaUseCase,
+)
+from src.application.use_cases.tarea_responsable import (
+    AsociarTareaResponsableUseCase,
+    DesasociarTareaResponsableUseCase,
+)
+from src.application.use_cases.tarea_archivo import (
+    AsociarTareaArchivoUseCase,
+    DesasociarTareaArchivoUseCase,
+)
+from src.infrastructure.adapters.output.repositories.tarea_repository import TareaRepository
+from src.infrastructure.adapters.output.repositories.tarea_responsable_repository import (
+    TareaResponsableRepository,
+)
+from src.infrastructure.adapters.output.repositories.tarea_archivo_repository import (
+    TareaArchivoRepository,
+)
+from src.infrastructure.adapters.output.repositories.empleado_repository import EmpleadoRepository
+from src.infrastructure.adapters.output.repositories.archivo_repository import ArchivoRepository
+
+router = APIRouter(prefix="/api/tarea", tags=["tarea"])
+
+
+def _to_response(entity) -> TareaResponse:
+    return TareaResponse(
+        id_tarea=entity.id_tarea,
+        id_comunicado=entity.id_comunicado,
+        descripcion=entity.descripcion,
+        fecha_entrega=entity.fecha_entrega,
+        fecha_registro=entity.fecha_registro,
+        id_estado_tarea=entity.id_estado_tarea,
+    )
+
+
+@router.post("/", response_model=TareaResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateTareaRequest, db: Session = Depends(get_db)):
+    repo = TareaRepository(db)
+    use_case = CreateTareaUseCase(repo)
+    entity = use_case.ejecutar(
+        request.id_comunicado,
+        request.descripcion,
+        request.fecha_entrega,
+        request.fecha_registro,
+        request.id_estado_tarea,
+    )
+    return _to_response(entity)
+
+
+@router.get("/{id_tarea}", response_model=TareaResponse)
+def obtener(id_tarea: int, db: Session = Depends(get_db)):
+    try:
+        repo = TareaRepository(db)
+        use_case = GetTareaUseCase(repo)
+        entity = use_case.ejecutar(id_tarea)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListTareaResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = TareaRepository(db)
+    use_case = ListTareaUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListTareaResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_tarea}", response_model=TareaResponse)
+def actualizar(id_tarea: int, request: UpdateTareaRequest, db: Session = Depends(get_db)):
+    try:
+        repo = TareaRepository(db)
+        use_case = UpdateTareaUseCase(repo)
+        entity = use_case.ejecutar(
+            id_tarea,
+            request.id_comunicado,
+            request.descripcion,
+            request.fecha_entrega,
+            request.fecha_registro,
+            request.id_estado_tarea,
+        )
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_tarea}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_tarea: int, db: Session = Depends(get_db)):
+    try:
+        repo = TareaRepository(db)
+        use_case = DeleteTareaUseCase(repo)
+        use_case.ejecutar(id_tarea)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/{id_tarea}/responsables",
+    response_model=TareaResponsableResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def asociar_responsable(
+    id_tarea: int,
+    request: AsociarTareaResponsableRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = TareaResponsableRepository(db)
+        tarea_repo = TareaRepository(db)
+        empleado_repo = EmpleadoRepository(db)
+        use_case = AsociarTareaResponsableUseCase(repo, tarea_repo, empleado_repo)
+        entity = use_case.ejecutar(id_tarea, request.id_responsable, request.id_rol)
+        return TareaResponsableResponse(
+            id_tarea=entity.id_tarea,
+            id_responsable=entity.id_responsable,
+            id_rol=entity.id_rol,
+        )
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AsociacionYaExisteException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{id_tarea}/responsables/{id_responsable}", status_code=status.HTTP_204_NO_CONTENT)
+def desasociar_responsable(id_tarea: int, id_responsable: int, db: Session = Depends(get_db)):
+    try:
+        repo = TareaResponsableRepository(db)
+        use_case = DesasociarTareaResponsableUseCase(repo)
+        use_case.ejecutar(id_tarea, id_responsable)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/{id_tarea}/archivos",
+    response_model=TareaArchivoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def asociar_archivo(
+    id_tarea: int,
+    request: AsociarTareaArchivoRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = TareaArchivoRepository(db)
+        tarea_repo = TareaRepository(db)
+        archivo_repo = ArchivoRepository(db)
+        use_case = AsociarTareaArchivoUseCase(repo, tarea_repo, archivo_repo)
+        entity = use_case.ejecutar(id_tarea, request.id_archivo)
+        return TareaArchivoResponse(id_tarea=entity.id_tarea, id_archivo=entity.id_archivo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AsociacionYaExisteException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{id_tarea}/archivos/{id_archivo}", status_code=status.HTTP_204_NO_CONTENT)
+def desasociar_archivo(id_tarea: int, id_archivo: int, db: Session = Depends(get_db)):
+    try:
+        repo = TareaArchivoRepository(db)
+        use_case = DesasociarTareaArchivoUseCase(repo)
+        use_case.ejecutar(id_tarea, id_archivo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.rol_responsable import (
+    CreateRolResponsableRequest,
+    UpdateRolResponsableRequest,
+    RolResponsableResponse,
+    ListRolResponsableResponse,
+)
+from src.application.use_cases.rol_responsable import (
+    CreateRolResponsableUseCase,
+    GetRolResponsableUseCase,
+    ListRolResponsableUseCase,
+    UpdateRolResponsableUseCase,
+    DeleteRolResponsableUseCase,
+)
+from src.infrastructure.adapters.output.repositories.rol_responsable_repository import (
+    RolResponsableRepository,
+)
+
+router = APIRouter(prefix="/api/rol-responsable", tags=["rol-responsable"])
+
+
+def _to_response(entity) -> RolResponsableResponse:
+    return RolResponsableResponse(id_rol=entity.id_rol, descripcion_rol=entity.descripcion_rol)
+
+
+@router.post("/", response_model=RolResponsableResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateRolResponsableRequest, db: Session = Depends(get_db)):
+    repo = RolResponsableRepository(db)
+    use_case = CreateRolResponsableUseCase(repo)
+    entity = use_case.ejecutar(request.descripcion_rol)
+    return _to_response(entity)
+
+
+@router.get("/{id_rol}", response_model=RolResponsableResponse)
+def obtener(id_rol: int, db: Session = Depends(get_db)):
+    try:
+        repo = RolResponsableRepository(db)
+        use_case = GetRolResponsableUseCase(repo)
+        entity = use_case.ejecutar(id_rol)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListRolResponsableResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = RolResponsableRepository(db)
+    use_case = ListRolResponsableUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListRolResponsableResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_rol}", response_model=RolResponsableResponse)
+def actualizar(id_rol: int, request: UpdateRolResponsableRequest, db: Session = Depends(get_db)):
+    try:
+        repo = RolResponsableRepository(db)
+        use_case = UpdateRolResponsableUseCase(repo)
+        entity = use_case.ejecutar(id_rol, request.descripcion_rol)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_rol}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_rol: int, db: Session = Depends(get_db)):
+    try:
+        repo = RolResponsableRepository(db)
+        use_case = DeleteRolResponsableUseCase(repo)
+        use_case.ejecutar(id_rol)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.archivo import (
+    CreateArchivoRequest,
+    UpdateArchivoRequest,
+    ArchivoResponse,
+    ListArchivoResponse,
+)
+from src.application.use_cases.archivo import (
+    CreateArchivoUseCase,
+    GetArchivoUseCase,
+    ListArchivoUseCase,
+    UpdateArchivoUseCase,
+    DeleteArchivoUseCase,
+)
+from src.infrastructure.adapters.output.repositories.archivo_repository import ArchivoRepository
+
+router = APIRouter(prefix="/api/archivo", tags=["archivo"])
+
+
+def _to_response(entity) -> ArchivoResponse:
+    return ArchivoResponse(
+        id_archivo=entity.id_archivo,
+        doi=entity.doi,
+        descripcion=entity.descripcion,
+        url_archivo=entity.url_archivo,
+        nombre_original=entity.nombre_original,
+        id_elaborador=entity.id_elaborador,
+        fecha_registro=entity.fecha_registro,
+    )
+
+
+@router.post("/", response_model=ArchivoResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateArchivoRequest, db: Session = Depends(get_db)):
+    repo = ArchivoRepository(db)
+    use_case = CreateArchivoUseCase(repo)
+    entity = use_case.ejecutar(
+        request.doi,
+        request.descripcion,
+        request.url_archivo,
+        request.nombre_original,
+        request.id_elaborador,
+        request.fecha_registro,
+    )
+    return _to_response(entity)
+
+
+@router.get("/{id_archivo}", response_model=ArchivoResponse)
+def obtener(id_archivo: int, db: Session = Depends(get_db)):
+    try:
+        repo = ArchivoRepository(db)
+        use_case = GetArchivoUseCase(repo)
+        entity = use_case.ejecutar(id_archivo)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListArchivoResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = ArchivoRepository(db)
+    use_case = ListArchivoUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListArchivoResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_archivo}", response_model=ArchivoResponse)
+def actualizar(id_archivo: int, request: UpdateArchivoRequest, db: Session = Depends(get_db)):
+    try:
+        repo = ArchivoRepository(db)
+        use_case = UpdateArchivoUseCase(repo)
+        entity = use_case.ejecutar(
+            id_archivo,
+            request.doi,
+            request.descripcion,
+            request.url_archivo,
+            request.nombre_original,
+            request.id_elaborador,
+            request.fecha_registro,
+        )
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_archivo}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_archivo: int, db: Session = Depends(get_db)):
+    try:
+        repo = ArchivoRepository(db)
+        use_case = DeleteArchivoUseCase(repo)
+        use_case.ejecutar(id_archivo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException
+from src.application.dtos.rol_destinatario import (
+    CreateRolDestinatarioRequest,
+    UpdateRolDestinatarioRequest,
+    RolDestinatarioResponse,
+    ListRolDestinatarioResponse,
+)
+from src.application.use_cases.rol_destinatario import (
+    CreateRolDestinatarioUseCase,
+    GetRolDestinatarioUseCase,
+    ListRolDestinatarioUseCase,
+    UpdateRolDestinatarioUseCase,
+    DeleteRolDestinatarioUseCase,
+)
+from src.infrastructure.adapters.output.repositories.rol_destinatario_repository import (
+    RolDestinatarioRepository,
+)
+
+router = APIRouter(prefix="/api/rol-destinatario", tags=["rol-destinatario"])
+
+
+def _to_response(entity) -> RolDestinatarioResponse:
+    return RolDestinatarioResponse(id_rol=entity.id_rol, descripcion=entity.descripcion)
+
+
+@router.post("/", response_model=RolDestinatarioResponse, status_code=status.HTTP_201_CREATED)
+def crear(request: CreateRolDestinatarioRequest, db: Session = Depends(get_db)):
+    repo = RolDestinatarioRepository(db)
+    use_case = CreateRolDestinatarioUseCase(repo)
+    entity = use_case.ejecutar(request.descripcion)
+    return _to_response(entity)
+
+
+@router.get("/{id_rol}", response_model=RolDestinatarioResponse)
+def obtener(id_rol: int, db: Session = Depends(get_db)):
+    try:
+        repo = RolDestinatarioRepository(db)
+        use_case = GetRolDestinatarioUseCase(repo)
+        entity = use_case.ejecutar(id_rol)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/", response_model=ListRolDestinatarioResponse)
+def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    repo = RolDestinatarioRepository(db)
+    use_case = ListRolDestinatarioUseCase(repo)
+    items = use_case.ejecutar(skip, limit)
+    return ListRolDestinatarioResponse(
+        items=[_to_response(i) for i in items],
+        total=repo.contar(),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put("/{id_rol}", response_model=RolDestinatarioResponse)
+def actualizar(id_rol: int, request: UpdateRolDestinatarioRequest, db: Session = Depends(get_db)):
+    try:
+        repo = RolDestinatarioRepository(db)
+        use_case = UpdateRolDestinatarioUseCase(repo)
+        entity = use_case.ejecutar(id_rol, request.descripcion)
+        return _to_response(entity)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{id_rol}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar(id_rol: int, db: Session = Depends(get_db)):
+    try:
+        repo = RolDestinatarioRepository(db)
+        use_case = DeleteRolDestinatarioUseCase(repo)
+        use_case.ejecutar(id_rol)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from src.infrastructure.config import get_db
+from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.application.dtos.emp_cargo import AsociarEmpCargoRequest, EmpCargoResponse
+from src.application.use_cases.emp_cargo import AsociarEmpCargoUseCase, DesasociarEmpCargoUseCase
+from src.infrastructure.adapters.output.repositories.emp_cargo_repository import EmpCargoRepository
+from src.infrastructure.adapters.output.repositories.empleado_repository import EmpleadoRepository
+
+router = APIRouter(prefix="/api/emp-cargo", tags=["emp-cargo"])
+
+
+@router.post("/", response_model=EmpCargoResponse, status_code=status.HTTP_201_CREATED)
+def asociar(request: AsociarEmpCargoRequest, db: Session = Depends(get_db)):
+    try:
+        repo = EmpCargoRepository(db)
+        empleado_repo = EmpleadoRepository(db)
+        use_case = AsociarEmpCargoUseCase(repo, empleado_repo)
+        entity = use_case.ejecutar(
+            request.id_empleado,
+            request.id_cargo,
+            request.fecha_inicio,
+            request.fecha_termina,
+            request.id_registro_modificacion,
+        )
+        return EmpCargoResponse(
+            id_empleado=entity.id_empleado,
+            id_cargo=entity.id_cargo,
+            fecha_inicio=entity.fecha_inicio,
+            fecha_termina=entity.fecha_termina,
+            id_registro_modificacion=entity.id_registro_modificacion,
+        )
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AsociacionYaExisteException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{id_empleado}/{id_cargo}", status_code=status.HTTP_204_NO_CONTENT)
+def desasociar(id_empleado: int, id_cargo: int, db: Session = Depends(get_db)):
+    try:
+        repo = EmpCargoRepository(db)
+        use_case = DesasociarEmpCargoUseCase(repo)
+        use_case.ejecutar(id_empleado, id_cargo)
+    except RecursoNoEncontradoException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.tipo_catalogo import TipoCatalogo
+from src.domain.ports.output.tipo_catalogo import TipoCatalogoRepositoryPort
+from src.infrastructure.adapters.output.persistence.tipo_catalogo import TipoCatalogoORM
+
+
+class TipoCatalogoRepository(TipoCatalogoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, tipo_catalogo: TipoCatalogo) -> TipoCatalogo:
+        orm = TipoCatalogoORM(nombre_tipo_catalogo=tipo_catalogo.nombre_tipo_catalogo)
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_tipo_catalogo: int) -> Optional[TipoCatalogo]:
+        orm = self.session.query(TipoCatalogoORM).filter(
+            TipoCatalogoORM.id_tipo_catalogo == id_tipo_catalogo
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[TipoCatalogo]:
+        orms = self.session.query(TipoCatalogoORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(TipoCatalogoORM).count()
+
+    def actualizar(self, tipo_catalogo: TipoCatalogo) -> Optional[TipoCatalogo]:
+        orm = self.session.query(TipoCatalogoORM).filter(
+            TipoCatalogoORM.id_tipo_catalogo == tipo_catalogo.id_tipo_catalogo
+        ).first()
+        if not orm:
+            return None
+        orm.nombre_tipo_catalogo = tipo_catalogo.nombre_tipo_catalogo
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_tipo_catalogo: int) -> bool:
+        orm = self.session.query(TipoCatalogoORM).filter(
+            TipoCatalogoORM.id_tipo_catalogo == id_tipo_catalogo
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: TipoCatalogoORM) -> TipoCatalogo:
+        return TipoCatalogo(
+            id_tipo_catalogo=orm.id_tipo_catalogo,
+            nombre_tipo_catalogo=orm.nombre_tipo_catalogo,
+        )
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.rol_destinatario import RolDestinatario
+from src.domain.ports.output.rol_destinatario import RolDestinatarioRepositoryPort
+from src.infrastructure.adapters.output.persistence.rol_destinatario import RolDestinatarioORM
+
+
+class RolDestinatarioRepository(RolDestinatarioRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, rol_destinatario: RolDestinatario) -> RolDestinatario:
+        orm = RolDestinatarioORM(descripcion=rol_destinatario.descripcion)
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_rol: int) -> Optional[RolDestinatario]:
+        orm = self.session.query(RolDestinatarioORM).filter(
+            RolDestinatarioORM.id_rol == id_rol
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[RolDestinatario]:
+        orms = self.session.query(RolDestinatarioORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(RolDestinatarioORM).count()
+
+    def actualizar(self, rol_destinatario: RolDestinatario) -> Optional[RolDestinatario]:
+        orm = self.session.query(RolDestinatarioORM).filter(
+            RolDestinatarioORM.id_rol == rol_destinatario.id_rol
+        ).first()
+        if not orm:
+            return None
+        orm.descripcion = rol_destinatario.descripcion
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_rol: int) -> bool:
+        orm = self.session.query(RolDestinatarioORM).filter(
+            RolDestinatarioORM.id_rol == id_rol
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: RolDestinatarioORM) -> RolDestinatario:
+        return RolDestinatario(id_rol=orm.id_rol, descripcion=orm.descripcion)
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.comunicado_destinatario import ComunicadoDestinatario
+from src.domain.ports.output.comunicado_destinatario import ComunicadoDestinatarioRepositoryPort
+from src.infrastructure.adapters.output.persistence.comunicado_destinatario import ComunicadoDestinatarioORM
+
+
+class ComunicadoDestinatarioRepository(ComunicadoDestinatarioRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, asociacion: ComunicadoDestinatario) -> ComunicadoDestinatario:
+        orm = ComunicadoDestinatarioORM(
+            id_comunicado=asociacion.id_comunicado,
+            id_destinatario=asociacion.id_destinatario,
+            id_rol_destinatario=asociacion.id_rol_destinatario,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        return asociacion
+
+    def obtener(
+        self, id_comunicado: int, id_destinatario: int
+    ) -> Optional[ComunicadoDestinatario]:
+        orm = self.session.query(ComunicadoDestinatarioORM).filter(
+            ComunicadoDestinatarioORM.id_comunicado == id_comunicado,
+            ComunicadoDestinatarioORM.id_destinatario == id_destinatario,
+        ).first()
+        if not orm:
+            return None
+        return ComunicadoDestinatario(
+            id_comunicado=orm.id_comunicado,
+            id_destinatario=orm.id_destinatario,
+            id_rol_destinatario=orm.id_rol_destinatario,
+        )
+
+    def eliminar(self, id_comunicado: int, id_destinatario: int) -> bool:
+        orm = self.session.query(ComunicadoDestinatarioORM).filter(
+            ComunicadoDestinatarioORM.id_comunicado == id_comunicado,
+            ComunicadoDestinatarioORM.id_destinatario == id_destinatario,
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.archivo import Archivo
+from src.domain.ports.output.archivo import ArchivoRepositoryPort
+from src.infrastructure.adapters.output.persistence.archivo import ArchivoORM
+
+
+class ArchivoRepository(ArchivoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, archivo: Archivo) -> Archivo:
+        orm = ArchivoORM(
+            doi=archivo.doi,
+            descripcion=archivo.descripcion,
+            url_archivo=archivo.url_archivo,
+            nombre_original=archivo.nombre_original,
+            id_elaborador=archivo.id_elaborador,
+            fecha_registro=archivo.fecha_registro,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_archivo: int) -> Optional[Archivo]:
+        orm = self.session.query(ArchivoORM).filter(
+            ArchivoORM.id_archivo == id_archivo
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[Archivo]:
+        orms = self.session.query(ArchivoORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(ArchivoORM).count()
+
+    def actualizar(self, archivo: Archivo) -> Optional[Archivo]:
+        orm = self.session.query(ArchivoORM).filter(
+            ArchivoORM.id_archivo == archivo.id_archivo
+        ).first()
+        if not orm:
+            return None
+        orm.doi = archivo.doi
+        orm.descripcion = archivo.descripcion
+        orm.url_archivo = archivo.url_archivo
+        orm.nombre_original = archivo.nombre_original
+        orm.id_elaborador = archivo.id_elaborador
+        orm.fecha_registro = archivo.fecha_registro
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_archivo: int) -> bool:
+        orm = self.session.query(ArchivoORM).filter(
+            ArchivoORM.id_archivo == id_archivo
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: ArchivoORM) -> Archivo:
+        return Archivo(
+            id_archivo=orm.id_archivo,
+            doi=orm.doi,
+            descripcion=orm.descripcion,
+            url_archivo=orm.url_archivo,
+            nombre_original=orm.nombre_original,
+            id_elaborador=orm.id_elaborador,
+            fecha_registro=orm.fecha_registro,
+        )
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.tarea import Tarea
+from src.domain.ports.output.tarea import TareaRepositoryPort
+from src.infrastructure.adapters.output.persistence.tarea import TareaORM
+
+
+class TareaRepository(TareaRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, tarea: Tarea) -> Tarea:
+        orm = TareaORM(
+            id_comunicado=tarea.id_comunicado,
+            descripcion=tarea.descripcion,
+            fecha_entrega=tarea.fecha_entrega,
+            fecha_registro=tarea.fecha_registro,
+            id_estado_tarea=tarea.id_estado_tarea,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_tarea: int) -> Optional[Tarea]:
+        orm = self.session.query(TareaORM).filter(
+            TareaORM.id_tarea == id_tarea
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[Tarea]:
+        orms = self.session.query(TareaORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(TareaORM).count()
+
+    def actualizar(self, tarea: Tarea) -> Optional[Tarea]:
+        orm = self.session.query(TareaORM).filter(
+            TareaORM.id_tarea == tarea.id_tarea
+        ).first()
+        if not orm:
+            return None
+        orm.id_comunicado = tarea.id_comunicado
+        orm.descripcion = tarea.descripcion
+        orm.fecha_entrega = tarea.fecha_entrega
+        orm.fecha_registro = tarea.fecha_registro
+        orm.id_estado_tarea = tarea.id_estado_tarea
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_tarea: int) -> bool:
+        orm = self.session.query(TareaORM).filter(
+            TareaORM.id_tarea == id_tarea
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: TareaORM) -> Tarea:
+        return Tarea(
+            id_tarea=orm.id_tarea,
+            id_comunicado=orm.id_comunicado,
+            descripcion=orm.descripcion,
+            fecha_entrega=orm.fecha_entrega,
+            fecha_registro=orm.fecha_registro,
+            id_estado_tarea=orm.id_estado_tarea,
+        )
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.comunicado_adjunto import ComunicadoAdjunto
+from src.domain.ports.output.comunicado_adjunto import ComunicadoAdjuntoRepositoryPort
+from src.infrastructure.adapters.output.persistence.comunicado_adjunto import ComunicadoAdjuntoORM
+
+
+class ComunicadoAdjuntoRepository(ComunicadoAdjuntoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, asociacion: ComunicadoAdjunto) -> ComunicadoAdjunto:
+        orm = ComunicadoAdjuntoORM(
+            id_comunicado=asociacion.id_comunicado,
+            id_archivo=asociacion.id_archivo,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        return asociacion
+
+    def obtener(self, id_comunicado: int, id_archivo: int) -> Optional[ComunicadoAdjunto]:
+        orm = self.session.query(ComunicadoAdjuntoORM).filter(
+            ComunicadoAdjuntoORM.id_comunicado == id_comunicado,
+            ComunicadoAdjuntoORM.id_archivo == id_archivo,
+        ).first()
+        if not orm:
+            return None
+        return ComunicadoAdjunto(id_comunicado=orm.id_comunicado, id_archivo=orm.id_archivo)
+
+    def eliminar(self, id_comunicado: int, id_archivo: int) -> bool:
+        orm = self.session.query(ComunicadoAdjuntoORM).filter(
+            ComunicadoAdjuntoORM.id_comunicado == id_comunicado,
+            ComunicadoAdjuntoORM.id_archivo == id_archivo,
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.comunicado import Comunicado
+from src.domain.ports.output.comunicado import ComunicadoRepositoryPort
+from src.infrastructure.adapters.output.persistence.comunicado import ComunicadoORM
+
+
+class ComunicadoRepository(ComunicadoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, comunicado: Comunicado) -> Comunicado:
+        orm = ComunicadoORM(
+            doi=comunicado.doi,
+            num_comunicado=comunicado.num_comunicado,
+            id_emisor=comunicado.id_emisor,
+            fecha_recepcion=comunicado.fecha_recepcion,
+            id_destinatario=comunicado.id_destinatario,
+            fecha_registro=comunicado.fecha_registro,
+            id_registro=comunicado.id_registro,
+            id_metodo_recepcion=comunicado.id_metodo_recepcion,
+            tema=comunicado.tema,
+            observaciones=comunicado.observaciones,
+            id_tipo_comunicado=comunicado.id_tipo_comunicado,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_comunicado: int) -> Optional[Comunicado]:
+        orm = self.session.query(ComunicadoORM).filter(
+            ComunicadoORM.id_comunicado == id_comunicado
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[Comunicado]:
+        orms = self.session.query(ComunicadoORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(ComunicadoORM).count()
+
+    def actualizar(self, comunicado: Comunicado) -> Optional[Comunicado]:
+        orm = self.session.query(ComunicadoORM).filter(
+            ComunicadoORM.id_comunicado == comunicado.id_comunicado
+        ).first()
+        if not orm:
+            return None
+        orm.doi = comunicado.doi
+        orm.num_comunicado = comunicado.num_comunicado
+        orm.id_emisor = comunicado.id_emisor
+        orm.fecha_recepcion = comunicado.fecha_recepcion
+        orm.id_destinatario = comunicado.id_destinatario
+        orm.fecha_registro = comunicado.fecha_registro
+        orm.id_registro = comunicado.id_registro
+        orm.id_metodo_recepcion = comunicado.id_metodo_recepcion
+        orm.tema = comunicado.tema
+        orm.observaciones = comunicado.observaciones
+        orm.id_tipo_comunicado = comunicado.id_tipo_comunicado
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_comunicado: int) -> bool:
+        orm = self.session.query(ComunicadoORM).filter(
+            ComunicadoORM.id_comunicado == id_comunicado
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: ComunicadoORM) -> Comunicado:
+        return Comunicado(
+            id_comunicado=orm.id_comunicado,
+            doi=orm.doi,
+            num_comunicado=orm.num_comunicado,
+            id_emisor=orm.id_emisor,
+            fecha_recepcion=orm.fecha_recepcion,
+            id_destinatario=orm.id_destinatario,
+            fecha_registro=orm.fecha_registro,
+            id_registro=orm.id_registro,
+            id_metodo_recepcion=orm.id_metodo_recepcion,
+            tema=orm.tema,
+            id_tipo_comunicado=orm.id_tipo_comunicado,
+            observaciones=orm.observaciones,
+        )
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.catalogo import Catalogo
+from src.domain.ports.output.catalogo import CatalogoRepositoryPort
+from src.infrastructure.adapters.output.persistence.catalogo import CatalogoORM
+
+
+class CatalogoRepository(CatalogoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, catalogo: Catalogo) -> Catalogo:
+        orm = CatalogoORM(
+            id_tipo_catalogo=catalogo.id_tipo_catalogo,
+            descripcion=catalogo.descripcion,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_catalogo: int) -> Optional[Catalogo]:
+        orm = self.session.query(CatalogoORM).filter(
+            CatalogoORM.id_catalogo == id_catalogo
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[Catalogo]:
+        orms = self.session.query(CatalogoORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(CatalogoORM).count()
+
+    def actualizar(self, catalogo: Catalogo) -> Optional[Catalogo]:
+        orm = self.session.query(CatalogoORM).filter(
+            CatalogoORM.id_catalogo == catalogo.id_catalogo
+        ).first()
+        if not orm:
+            return None
+        orm.id_tipo_catalogo = catalogo.id_tipo_catalogo
+        orm.descripcion = catalogo.descripcion
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_catalogo: int) -> bool:
+        orm = self.session.query(CatalogoORM).filter(
+            CatalogoORM.id_catalogo == id_catalogo
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: CatalogoORM) -> Catalogo:
+        return Catalogo(
+            id_catalogo=orm.id_catalogo,
+            id_tipo_catalogo=orm.id_tipo_catalogo,
+            descripcion=orm.descripcion,
+        )
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.tarea_responsable import TareaResponsable
+from src.domain.ports.output.tarea_responsable import TareaResponsableRepositoryPort
+from src.infrastructure.adapters.output.persistence.tarea_responsable import TareaResponsableORM
+
+
+class TareaResponsableRepository(TareaResponsableRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, asociacion: TareaResponsable) -> TareaResponsable:
+        orm = TareaResponsableORM(
+            id_tarea=asociacion.id_tarea,
+            id_responsable=asociacion.id_responsable,
+            id_rol=asociacion.id_rol,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        return asociacion
+
+    def obtener(self, id_tarea: int, id_responsable: int) -> Optional[TareaResponsable]:
+        orm = self.session.query(TareaResponsableORM).filter(
+            TareaResponsableORM.id_tarea == id_tarea,
+            TareaResponsableORM.id_responsable == id_responsable,
+        ).first()
+        if not orm:
+            return None
+        return TareaResponsable(
+            id_tarea=orm.id_tarea,
+            id_responsable=orm.id_responsable,
+            id_rol=orm.id_rol,
+        )
+
+    def eliminar(self, id_tarea: int, id_responsable: int) -> bool:
+        orm = self.session.query(TareaResponsableORM).filter(
+            TareaResponsableORM.id_tarea == id_tarea,
+            TareaResponsableORM.id_responsable == id_responsable,
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.emp_cargo import EmpCargo
+from src.domain.ports.output.emp_cargo import EmpCargoRepositoryPort
+from src.infrastructure.adapters.output.persistence.emp_cargo import EmpCargoORM
+
+
+class EmpCargoRepository(EmpCargoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, emp_cargo: EmpCargo) -> EmpCargo:
+        orm = EmpCargoORM(
+            id_empleado=emp_cargo.id_empleado,
+            id_cargo=emp_cargo.id_cargo,
+            fecha_inicio=emp_cargo.fecha_inicio,
+            fecha_termina=emp_cargo.fecha_termina,
+            id_registro_modificacion=emp_cargo.id_registro_modificacion,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        return emp_cargo
+
+    def obtener(self, id_empleado: int, id_cargo: int) -> Optional[EmpCargo]:
+        orm = self.session.query(EmpCargoORM).filter(
+            EmpCargoORM.id_empleado == id_empleado,
+            EmpCargoORM.id_cargo == id_cargo,
+        ).first()
+        if not orm:
+            return None
+        return EmpCargo(
+            id_empleado=orm.id_empleado,
+            id_cargo=orm.id_cargo,
+            fecha_inicio=orm.fecha_inicio,
+            fecha_termina=orm.fecha_termina,
+            id_registro_modificacion=orm.id_registro_modificacion,
+        )
+
+    def eliminar(self, id_empleado: int, id_cargo: int) -> bool:
+        orm = self.session.query(EmpCargoORM).filter(
+            EmpCargoORM.id_empleado == id_empleado,
+            EmpCargoORM.id_cargo == id_cargo,
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+"""Adaptador de repositorio para Empleado (ORM + SQLAlchemy)."""
+
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.entities.empleado import Empleado
+from src.infrastructure.adapters.output.persistence.empleado import EmpleadoORM
+
+
+class EmpleadoRepository(EmpleadoRepositoryPort):
+    """Implementación del puerto de repositorio usando SQLAlchemy.
+    
+    Mapea entre las entidades de dominio y los modelos ORM.
+    """
+
+    def __init__(self, session: Session):
+        """
+        Args:
+            session: Sesión de SQLAlchemy
+        """
+        self.session = session
+
+    def obtener_por_email(self, email: str) -> Optional[Empleado]:
+        """Busca un empleado por email usando ORM."""
+        empleado_orm = self.session.query(EmpleadoORM).filter(
+            EmpleadoORM.email == email
+        ).first()
+        
+        if not empleado_orm:
+            return None
+        
+        return self._orm_a_dominio(empleado_orm)
+
+    def obtener_por_id(self, id_empleado: int) -> Optional[Empleado]:
+        """Busca un empleado por ID usando ORM."""
+        empleado_orm = self.session.query(EmpleadoORM).filter(
+            EmpleadoORM.id_empleado == id_empleado
+        ).first()
+        
+        if not empleado_orm:
+            return None
+        
+        return self._orm_a_dominio(empleado_orm)
+
+    def crear(self, empleado: Empleado) -> Empleado:
+        """Crea un nuevo empleado en la BD."""
+        empleado_orm = EmpleadoORM(
+            nombre=empleado.nombre,
+            email=empleado.email,
+            password_hash=empleado.password_hash,
+            id_area=empleado.id_area,
+            id_cargo=empleado.id_cargo,
+        )
+        
+        self.session.add(empleado_orm)
+        self.session.commit()
+        self.session.refresh(empleado_orm)
+        
+        return self._orm_a_dominio(empleado_orm)
+
+    def existe_email(self, email: str) -> bool:
+        """Verifica si un email ya existe."""
+        count = self.session.query(EmpleadoORM).filter(
+            EmpleadoORM.email == email
+        ).count()
+        
+        return count > 0
+
+    def _orm_a_dominio(self, empleado_orm: EmpleadoORM) -> Empleado:
+        """Convierte un ORM a entidad de dominio."""
+        return Empleado(
+            id_empleado=empleado_orm.id_empleado,
+            nombre=empleado_orm.nombre,
+            email=empleado_orm.email,
+            password_hash=empleado_orm.password_hash,
+            id_area=empleado_orm.id_area,
+            id_cargo=empleado_orm.id_cargo,
+        )
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.estado_tarea import EstadoTarea
+from src.domain.ports.output.estado_tarea import EstadoTareaRepositoryPort
+from src.infrastructure.adapters.output.persistence.estado_tarea import EstadoTareaORM
+
+
+class EstadoTareaRepository(EstadoTareaRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, estado_tarea: EstadoTarea) -> EstadoTarea:
+        orm = EstadoTareaORM(nombre_estado=estado_tarea.nombre_estado)
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_estado_tarea: int) -> Optional[EstadoTarea]:
+        orm = self.session.query(EstadoTareaORM).filter(
+            EstadoTareaORM.id_estado_tarea == id_estado_tarea
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[EstadoTarea]:
+        orms = self.session.query(EstadoTareaORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(EstadoTareaORM).count()
+
+    def actualizar(self, estado_tarea: EstadoTarea) -> Optional[EstadoTarea]:
+        orm = self.session.query(EstadoTareaORM).filter(
+            EstadoTareaORM.id_estado_tarea == estado_tarea.id_estado_tarea
+        ).first()
+        if not orm:
+            return None
+        orm.nombre_estado = estado_tarea.nombre_estado
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_estado_tarea: int) -> bool:
+        orm = self.session.query(EstadoTareaORM).filter(
+            EstadoTareaORM.id_estado_tarea == id_estado_tarea
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: EstadoTareaORM) -> EstadoTarea:
+        return EstadoTarea(id_estado_tarea=orm.id_estado_tarea, nombre_estado=orm.nombre_estado)
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.rol_responsable import RolResponsable
+from src.domain.ports.output.rol_responsable import RolResponsableRepositoryPort
+from src.infrastructure.adapters.output.persistence.rol_responsable import RolResponsableORM
+
+
+class RolResponsableRepository(RolResponsableRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, rol_responsable: RolResponsable) -> RolResponsable:
+        orm = RolResponsableORM(descripcion_rol=rol_responsable.descripcion_rol)
+        self.session.add(orm)
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def obtener_por_id(self, id_rol: int) -> Optional[RolResponsable]:
+        orm = self.session.query(RolResponsableORM).filter(
+            RolResponsableORM.id_rol == id_rol
+        ).first()
+        if not orm:
+            return None
+        return self._orm_a_dominio(orm)
+
+    def listar(self, skip: int, limit: int) -> List[RolResponsable]:
+        orms = self.session.query(RolResponsableORM).offset(skip).limit(limit).all()
+        return [self._orm_a_dominio(orm) for orm in orms]
+
+    def contar(self) -> int:
+        return self.session.query(RolResponsableORM).count()
+
+    def actualizar(self, rol_responsable: RolResponsable) -> Optional[RolResponsable]:
+        orm = self.session.query(RolResponsableORM).filter(
+            RolResponsableORM.id_rol == rol_responsable.id_rol
+        ).first()
+        if not orm:
+            return None
+        orm.descripcion_rol = rol_responsable.descripcion_rol
+        self.session.commit()
+        self.session.refresh(orm)
+        return self._orm_a_dominio(orm)
+
+    def eliminar(self, id_rol: int) -> bool:
+        orm = self.session.query(RolResponsableORM).filter(
+            RolResponsableORM.id_rol == id_rol
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+
+    def _orm_a_dominio(self, orm: RolResponsableORM) -> RolResponsable:
+        return RolResponsable(id_rol=orm.id_rol, descripcion_rol=orm.descripcion_rol)
+from typing import Optional
+from sqlalchemy.orm import Session
+from src.domain.entities.tarea_archivo import TareaArchivo
+from src.domain.ports.output.tarea_archivo import TareaArchivoRepositoryPort
+from src.infrastructure.adapters.output.persistence.tarea_archivo import TareaArchivoORM
+
+
+class TareaArchivoRepository(TareaArchivoRepositoryPort):
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def crear(self, asociacion: TareaArchivo) -> TareaArchivo:
+        orm = TareaArchivoORM(
+            id_tarea=asociacion.id_tarea,
+            id_archivo=asociacion.id_archivo,
+        )
+        self.session.add(orm)
+        self.session.commit()
+        return asociacion
+
+    def obtener(self, id_tarea: int, id_archivo: int) -> Optional[TareaArchivo]:
+        orm = self.session.query(TareaArchivoORM).filter(
+            TareaArchivoORM.id_tarea == id_tarea,
+            TareaArchivoORM.id_archivo == id_archivo,
+        ).first()
+        if not orm:
+            return None
+        return TareaArchivo(id_tarea=orm.id_tarea, id_archivo=orm.id_archivo)
+
+    def eliminar(self, id_tarea: int, id_archivo: int) -> bool:
+        orm = self.session.query(TareaArchivoORM).filter(
+            TareaArchivoORM.id_tarea == id_tarea,
+            TareaArchivoORM.id_archivo == id_archivo,
+        ).first()
+        if not orm:
+            return False
+        self.session.delete(orm)
+        self.session.commit()
+        return True
+"""Base declarativa compartida para todos los modelos ORM.
+
+Este archivo define el único Base que deben usar todos los modelos ORM.
+Centralizar el Base permite que SQLAlchemy maneje correctamente las relaciones
+ForeignKey entre modelos definidos en archivos distintos.
+"""
+
+from sqlalchemy.orm import declarative_base
+
+# Único Base compartido para todos los modelos ORM
+Base = declarative_base()
+from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey
+from .base import Base
+
+
+class ComunicadoORM(Base):
+    """Modelo ORM: Comunicado.
+    
+    Mapeo a tabla PostgreSQL 'comunicado' sin campo IdArchivo directo.
+    Archivos adjuntos vía Comunicado_adjunto.
+    """
+    __tablename__ = "comunicado"
+    
+    id_comunicado = Column(Integer, primary_key=True, autoincrement=True)
+    doi = Column(String(255), nullable=False)
+    num_comunicado = Column(String(255), nullable=False)
+    id_emisor = Column(Integer, nullable=False)
+    fecha_recepcion = Column(Date, nullable=False)
+    id_destinatario = Column(Integer, nullable=False)
+    fecha_registro = Column(Date, nullable=False)
+    id_registro = Column(Integer, nullable=False)
+    id_metodo_recepcion = Column(Integer, nullable=False)
+    tema = Column(String(255), nullable=False)
+    observaciones = Column(Text, nullable=True)
+    id_tipo_comunicado = Column(Integer, nullable=False)
+    
+    def __repr__(self):
+        return f"<ComunicadoORM(id={self.id_comunicado}, num={self.num_comunicado})>"
+from sqlalchemy import Column, Integer, ForeignKey
+from .base import Base
+
+
+class ComunicadoAdjuntoORM(Base):
+    """Modelo ORM: Comunicado_Adjunto.
+    
+    Asociativa entre Comunicado y Archivo.
+    Un Comunicado puede tener varios archivos adjuntos.
+    """
+    __tablename__ = "comunicado_adjunto"
+    
+    id_comunicado = Column(Integer, ForeignKey("comunicado.id_comunicado"), primary_key=True)
+    id_archivo = Column(Integer, ForeignKey("archivo.id_archivo"), primary_key=True)
+    
+    def __repr__(self):
+        return f"<ComunicadoAdjuntoORM(comunicado={self.id_comunicado}, archivo={self.id_archivo})>"
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date
+from datetime import datetime
+from .base import Base
+
+
+class EmpleadoORM(Base):
+    """Modelo ORM: Empleado.
+    
+    Mapeo a tabla PostgreSQL 'empleado' con soporte para autenticación.
+    """
+    __tablename__ = "empleado"
+    
+    id_empleado = Column(Integer, primary_key=True, autoincrement=True)
+    nombre = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True)
+    password_hash = Column(String(255), nullable=False)
+    id_area = Column(Integer, nullable=False)
+    id_cargo = Column(Integer, nullable=False)
+    # ForeignKey pendientes: id_area -> Area, id_cargo -> Cargo
+    
+    def __repr__(self):
+        return f"<EmpleadoORM(id={self.id_empleado}, email={self.email})>"
+from sqlalchemy import Column, Integer, String
+from .base import Base
+
+
+class EstadoTareaORM(Base):
+    """Modelo ORM: EstadoTarea.
+    
+    Catálogo específico para estados de tareas.
+    """
+    __tablename__ = "estado_tarea"
+    
+    id_estado_tarea = Column(Integer, primary_key=True, autoincrement=True)
+    nombre_estado = Column(String(100), nullable=False)
+    
+    def __repr__(self):
+        return f"<EstadoTareaORM(id={self.id_estado_tarea}, estado={self.nombre_estado})>"
+from sqlalchemy import Column, Integer, String
+from .base import Base
+
+
+class EstadoORM(Base):
+    """Modelo ORM: Estado.
+    
+    Catálogo genérico para estados de otras entidades (Comunicado, Archivo).
+    NO se usa para Tarea (ver EstadoTarea).
+    """
+    __tablename__ = "estado"
+    
+    id_estado = Column(Integer, primary_key=True, autoincrement=True)
+    nombre_estado = Column(String(100), nullable=False)
+    
+    def __repr__(self):
+        return f"<EstadoORM(id={self.id_estado}, estado={self.nombre_estado})>"
+from sqlalchemy import Column, Integer, ForeignKey
+from .base import Base
+
+
+class TareaArchivoORM(Base):
+    """Modelo ORM: TareaArchivo.
+    
+    Asociativa entre Tarea y Archivo.
+    """
+    __tablename__ = "tarea_archivo"
+    
+    id_tarea = Column(Integer, ForeignKey("tarea.id_tarea"), primary_key=True)
+    id_archivo = Column(Integer, ForeignKey("archivo.id_archivo"), primary_key=True)
+    
+    def __repr__(self):
+        return f"<TareaArchivoORM(tarea={self.id_tarea}, archivo={self.id_archivo})>"
+from sqlalchemy import Column, Integer, String
+from .base import Base
+
+
+class TipoCatalogoORM(Base):
+    """Modelo ORM: TipoCatalogo.
+    
+    Define los tipos de catálogos disponibles.
+    """
+    __tablename__ = "tipo_catalogo"
+    
+    id_tipo_catalogo = Column(Integer, primary_key=True, autoincrement=True)
+    nombre_tipo_catalogo = Column(String(100), nullable=False)
+    
+    def __repr__(self):
+        return f"<TipoCatalogoORM(id={self.id_tipo_catalogo}, nombre={self.nombre_tipo_catalogo})>"
+from sqlalchemy import Column, Integer, ForeignKey
+from .base import Base
+
+
+class ComunicadoDestinatarioORM(Base):
+    """Modelo ORM: ComunicadoDestinatario.
+    
+    Asociativa entre Comunicado y Destinatario con rol específico.
+    """
+    __tablename__ = "comunicado_destinatario"
+    
+    id_comunicado = Column(Integer, ForeignKey("comunicado.id_comunicado"), primary_key=True)
+    id_destinatario = Column(Integer, primary_key=True)
+    id_rol_destinatario = Column(Integer, ForeignKey("rol_destinatario.id_rol"), nullable=False)
+    
+    def __repr__(self):
+        return f"<ComunicadoDestinatarioORM(com={self.id_comunicado}, dest={self.id_destinatario}, rol={self.id_rol_destinatario})>"
+from sqlalchemy import Column, Integer, ForeignKey
+from .base import Base
+
+
+class TareaResponsableORM(Base):
+    """Modelo ORM: TareaResponsable.
+    
+    Asociativa entre Tarea y Empleado (responsable) con rol.
+    """
+    __tablename__ = "tarea_responsable"
+    
+    id_tarea = Column(Integer, ForeignKey("tarea.id_tarea"), primary_key=True)
+    id_responsable = Column(Integer, ForeignKey("empleado.id_empleado"), primary_key=True)
+    id_rol = Column(Integer, ForeignKey("rol_responsable.id_rol"), nullable=False)
+    
+    def __repr__(self):
+        return f"<TareaResponsableORM(tarea={self.id_tarea}, resp={self.id_responsable}, rol={self.id_rol})>"
+from sqlalchemy import Column, Integer, String, ForeignKey
+from .base import Base
+
+
+class CatalogoORM(Base):
+    """Modelo ORM: Catalogo.
+    
+    Catálogo genérico para valores comunes (TipoComunicado, MetodoRecepcion, etc).
+    """
+    __tablename__ = "catalogo"
+    
+    id_catalogo = Column(Integer, primary_key=True, autoincrement=True)
+    id_tipo_catalogo = Column(Integer, ForeignKey("tipo_catalogo.id_tipo_catalogo"), nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    
+    def __repr__(self):
+        return f"<CatalogoORM(id={self.id_catalogo}, tipo={self.id_tipo_catalogo}, desc={self.descripcion})>"from sqlalchemy import Column, Integer, String, Text, Date
+from .base import Base
+
+
+class TareaORM(Base):
+    """Modelo ORM: Tarea.
+    
+    Mapeo a tabla PostgreSQL 'tarea' con relación a EstadoTarea.
+    """
+    __tablename__ = "tarea"
+    
+    id_tarea = Column(Integer, primary_key=True, autoincrement=True)
+    id_comunicado = Column(Integer, nullable=False)
+    descripcion = Column(Text, nullable=False)
+    fecha_entrega = Column(Date, nullable=False)
+    fecha_registro = Column(Date, nullable=False)
+    id_estado_tarea = Column(Integer, nullable=True)  # FK -> estado_tarea.id_estado_tarea
+    
+    def __repr__(self):
+        return f"<TareaORM(id={self.id_tarea}, comunicado={self.id_comunicado})>"
+from sqlalchemy import Column, Integer, String
+from .base import Base
+
+
+class RolResponsableORM(Base):
+    """Modelo ORM: Rol_Responsable.
+    
+    Catálogo separado para roles de responsables en tareas.
+    """
+    __tablename__ = "rol_responsable"
+    
+    id_rol = Column(Integer, primary_key=True, autoincrement=True)
+    descripcion_rol = Column(String(255), nullable=False)
+    
+    def __repr__(self):
+        return f"<RolResponsableORM(id={self.id_rol}, desc={self.descripcion_rol})>"
+from sqlalchemy import Column, Integer, String, Text, Date, ForeignKey
+from .base import Base
+
+
+class ArchivoORM(Base):
+    """Modelo ORM: Archivo.
+    
+    Mapeo a tabla PostgreSQL 'archivo'.
+    Un archivo puede ser adjunto de un Comunicado o de una Tarea.
+    """
+    __tablename__ = "archivo"
+    
+    id_archivo = Column(Integer, primary_key=True, autoincrement=True)
+    doi = Column(String(255), nullable=False)
+    descripcion = Column(Text, nullable=False)
+    url_archivo = Column(String(500), nullable=False)
+    nombre_original = Column(String(255), nullable=False)
+    id_elaborador = Column(Integer, ForeignKey("empleado.id_empleado"), nullable=False)
+    fecha_registro = Column(Date, nullable=False)
+    
+    def __repr__(self):
+        return f"<ArchivoORM(id={self.id_archivo}, nombre={self.nombre_original})>"
+from sqlalchemy import Column, Integer, String
+from .base import Base
+
+
+class RolDestinatarioORM(Base):
+    """Modelo ORM: Rol_Destinatario.
+    
+    Catálogo separado para roles de destinatarios.
+    """
+    __tablename__ = "rol_destinatario"
+    
+    id_rol = Column(Integer, primary_key=True, autoincrement=True)
+    descripcion = Column(String(255), nullable=False)
+    
+    def __repr__(self):
+        return f"<RolDestinatarioORM(id={self.id_rol}, desc={self.descripcion})>"
+from sqlalchemy import Column, Integer, Date, ForeignKey
+from .base import Base
+
+
+class EmpCargoORM(Base):
+    """Modelo ORM: EmpCargo.
+    
+    Historial de cargos de un empleado con fechas.
+    """
+    __tablename__ = "emp_cargo"
+    
+    id_empleado = Column(Integer, ForeignKey("empleado.id_empleado"), primary_key=True)
+    id_cargo = Column(Integer, primary_key=True)
+    fecha_inicio = Column(Date, nullable=False)
+    fecha_termina = Column(Date, nullable=False)
+    id_registro_modificacion = Column(Integer, nullable=False)
+    
+    def __repr__(self):
+        return f"<EmpCargoORM(emp={self.id_empleado}, cargo={self.id_cargo})>""""Configuración de seguridad: JWT y hash de passwords."""
+
+import os
+import jwt
+from datetime import datetime, timedelta
+from typing import Dict, Any
+import bcrypt
+
+
+# Configuración JWT
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+JWT_ALGORITHM = "HS256"
+
+
+def hash_password(password: str) -> str:
+    """Hashea una contraseña usando bcrypt.
+    
+    Args:
+        password: Contraseña en texto plano
+        
+    Returns:
+        Hash de la contraseña
+    """
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password.encode(), salt)
+    return hashed.decode()
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verifica una contraseña contra su hash.
+    
+    Args:
+        password: Contraseña en texto plano a verificar
+        hashed: Hash almacenado
+        
+    Returns:
+        True si coincide, False en caso contrario
+    """
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+def crear_token_jwt(id_empleado: int, email: str, nombre: str) -> str:
+    """Crea un JWT con expiración.
+    
+    Args:
+        id_empleado: ID del empleado
+        email: Email del empleado
+        nombre: Nombre del empleado
+        
+    Returns:
+        Token JWT codificado
+    """
+    ahora = datetime.utcnow()
+    expiracion = ahora + timedelta(hours=JWT_EXPIRATION_HOURS)
+    
+    payload: Dict[str, Any] = {
+        "id_empleado": id_empleado,
+        "email": email,
+        "nombre": nombre,
+        "iat": ahora,
+        "exp": expiracion,
+    }
+    
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return token
+
+
+def verificar_token_jwt(token: str) -> Dict[str, Any]:
+    """Verifica y decodifica un JWT.
+    
+    Args:
+        token: Token JWT a verificar
+        
+    Returns:
+        Payload del token decodificado
+        
+    Raises:
+        jwt.InvalidTokenError: Si el token es inválido o expirado
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise jwt.InvalidTokenError("Token expirado")
+    except jwt.InvalidTokenError:
+        raise jwt.InvalidTokenError("Token inválido")
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://user:password@localhost:5432/comunicados_db"
+)
+
+# Crear engine de SQLAlchemy
+engine = create_engine(
+    DATABASE_URL,
+    echo=os.getenv("SQL_ECHO", "False").lower() == "true",
+    future=True
+)
+
+# Session factory
+SessionLocal = sessionmaker(
+    bind=engine,
+    class_=Session,
+    expire_on_commit=False
+)
+
+
+def get_db() -> Session:
+    """Dependency injection para obtener sesión de BD en FastAPI."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+"""Puerto de salida (output) para repositorio de Empleado."""
+
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.empleado import Empleado
+
+
+class EmpleadoRepositoryPort(ABC):
+    """Interfaz (puerto) para persistencia de Empleado.
+    
+    Define las operaciones que debe implementar el adaptador de persistencia.
+    """
+
+    @abstractmethod
+    def obtener_por_email(self, email: str) -> Optional[Empleado]:
+        """Busca un empleado por email.
+        
+        Args:
+            email: Email del empleado
+            
+        Returns:
+            Empleado si existe, None en caso contrario
+        """
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_empleado: int) -> Optional[Empleado]:
+        """Busca un empleado por ID.
+        
+        Args:
+            id_empleado: ID del empleado
+            
+        Returns:
+            Empleado si existe, None en caso contrario
+        """
+        pass
+
+    @abstractmethod
+    def crear(self, empleado: Empleado) -> Empleado:
+        """Crea un nuevo empleado.
+        
+        Args:
+            empleado: Instancia de Empleado con datos a guardar
+            
+        Returns:
+            Empleado guardado con ID asignado
+        """
+        pass
+
+    @abstractmethod
+    def existe_email(self, email: str) -> bool:
+        """Verifica si un email ya está registrado.
+        
+        Args:
+            email: Email a verificar
+            
+        Returns:
+            True si existe, False en caso contrario
+        """
+        pass
+"""Puertos de salida para Empleado."""
+
+from .empleado_repository_port import EmpleadoRepositoryPort
+
+__all__ = ["EmpleadoRepositoryPort"]
+from .archivo_repository_port import ArchivoRepositoryPort
+
+__all__ = ["ArchivoRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.archivo import Archivo
+
+
+class ArchivoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, archivo: Archivo) -> Archivo:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_archivo: int) -> Optional[Archivo]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[Archivo]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, archivo: Archivo) -> Optional[Archivo]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_archivo: int) -> bool:
+        pass
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.comunicado_destinatario import ComunicadoDestinatario
+
+
+class ComunicadoDestinatarioRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, asociacion: ComunicadoDestinatario) -> ComunicadoDestinatario:
+        pass
+
+    @abstractmethod
+    def obtener(
+        self, id_comunicado: int, id_destinatario: int
+    ) -> Optional[ComunicadoDestinatario]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_comunicado: int, id_destinatario: int) -> bool:
+        pass
+from .comunicado_destinatario_repository_port import ComunicadoDestinatarioRepositoryPort
+
+__all__ = ["ComunicadoDestinatarioRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.emp_cargo import EmpCargo
+
+
+class EmpCargoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, emp_cargo: EmpCargo) -> EmpCargo:
+        pass
+
+    @abstractmethod
+    def obtener(self, id_empleado: int, id_cargo: int) -> Optional[EmpCargo]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_empleado: int, id_cargo: int) -> bool:
+        pass
+from .emp_cargo_repository_port import EmpCargoRepositoryPort
+
+__all__ = ["EmpCargoRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.catalogo import Catalogo
+
+
+class CatalogoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, catalogo: Catalogo) -> Catalogo:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_catalogo: int) -> Optional[Catalogo]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[Catalogo]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, catalogo: Catalogo) -> Optional[Catalogo]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_catalogo: int) -> bool:
+        pass
+from .catalogo_repository_port import CatalogoRepositoryPort
+
+__all__ = ["CatalogoRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.rol_responsable import RolResponsable
+
+
+class RolResponsableRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, rol_responsable: RolResponsable) -> RolResponsable:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_rol: int) -> Optional[RolResponsable]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[RolResponsable]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, rol_responsable: RolResponsable) -> Optional[RolResponsable]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_rol: int) -> bool:
+        pass
+from .rol_responsable_repository_port import RolResponsableRepositoryPort
+
+__all__ = ["RolResponsableRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.rol_destinatario import RolDestinatario
+
+
+class RolDestinatarioRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, rol_destinatario: RolDestinatario) -> RolDestinatario:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_rol: int) -> Optional[RolDestinatario]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[RolDestinatario]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, rol_destinatario: RolDestinatario) -> Optional[RolDestinatario]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_rol: int) -> bool:
+        pass
+from .rol_destinatario_repository_port import RolDestinatarioRepositoryPort
+
+__all__ = ["RolDestinatarioRepositoryPort"]
+from .tarea_archivo_repository_port import TareaArchivoRepositoryPort
+
+__all__ = ["TareaArchivoRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.tarea_archivo import TareaArchivo
+
+
+class TareaArchivoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, asociacion: TareaArchivo) -> TareaArchivo:
+        pass
+
+    @abstractmethod
+    def obtener(self, id_tarea: int, id_archivo: int) -> Optional[TareaArchivo]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_tarea: int, id_archivo: int) -> bool:
+        pass
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.tarea import Tarea
+
+
+class TareaRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, tarea: Tarea) -> Tarea:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_tarea: int) -> Optional[Tarea]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[Tarea]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, tarea: Tarea) -> Optional[Tarea]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_tarea: int) -> bool:
+        pass
+from .tarea_repository_port import TareaRepositoryPort
+
+__all__ = ["TareaRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.tipo_catalogo import TipoCatalogo
+
+
+class TipoCatalogoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, tipo_catalogo: TipoCatalogo) -> TipoCatalogo:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_tipo_catalogo: int) -> Optional[TipoCatalogo]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[TipoCatalogo]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, tipo_catalogo: TipoCatalogo) -> Optional[TipoCatalogo]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_tipo_catalogo: int) -> bool:
+        passfrom  .tipo_catalogo_repository_port import TipoCatalogoRepositoryPort
+
+__all__ = ["TipoCatalogoRepositoryPort"]from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.estado_tarea import EstadoTarea
+
+
+class EstadoTareaRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, estado_tarea: EstadoTarea) -> EstadoTarea:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_estado_tarea: int) -> Optional[EstadoTarea]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[EstadoTarea]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, estado_tarea: EstadoTarea) -> Optional[EstadoTarea]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_estado_tarea: int) -> bool:
+        pass
+from .estado_tarea_repository_port import EstadoTareaRepositoryPort
+
+__all__ = ["EstadoTareaRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.comunicado_adjunto import ComunicadoAdjunto
+
+
+class ComunicadoAdjuntoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, asociacion: ComunicadoAdjunto) -> ComunicadoAdjunto:
+        pass
+
+    @abstractmethod
+    def obtener(self, id_comunicado: int, id_archivo: int) -> Optional[ComunicadoAdjunto]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_comunicado: int, id_archivo: int) -> bool:
+        pass
+from .comunicado_adjunto_repository_port import ComunicadoAdjuntoRepositoryPort
+
+__all__ = ["ComunicadoAdjuntoRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import Optional
+from src.domain.entities.tarea_responsable import TareaResponsable
+
+
+class TareaResponsableRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, asociacion: TareaResponsable) -> TareaResponsable:
+        pass
+
+    @abstractmethod
+    def obtener(self, id_tarea: int, id_responsable: int) -> Optional[TareaResponsable]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_tarea: int, id_responsable: int) -> bool:
+        pass
+from .tarea_responsable_repository_port import TareaResponsableRepositoryPort
+
+__all__ = ["TareaResponsableRepositoryPort"]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from src.domain.entities.comunicado import Comunicado
+
+
+class ComunicadoRepositoryPort(ABC):
+
+    @abstractmethod
+    def crear(self, comunicado: Comunicado) -> Comunicado:
+        pass
+
+    @abstractmethod
+    def obtener_por_id(self, id_comunicado: int) -> Optional[Comunicado]:
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int, limit: int) -> List[Comunicado]:
+        pass
+
+    @abstractmethod
+    def actualizar(self, comunicado: Comunicado) -> Optional[Comunicado]:
+        pass
+
+    @abstractmethod
+    def eliminar(self, id_comunicado: int) -> bool:
+        pass
+from .comunicado_repository_port import ComunicadoRepositoryPort
+
+__all__ = ["ComunicadoRepositoryPort"]
+"""Puerto de entrada (input) para caso de uso de login."""
+
+from abc import ABC, abstractmethod
+from typing import Optional, Tuple
+
+
+class LoginInputPort(ABC):
+    """Interfaz (puerto) para caso de uso de login.
+    
+    Define las operaciones de autenticación que expone el sistema.
+    """
+
+    @abstractmethod
+    def ejecutar(self, email: str, password: str) -> Tuple[str, int, str]:
+        """Ejecuta el login y retorna JWT.
+        
+        Args:
+            email: Email del empleado
+            password: Contraseña en texto plano
+            
+        Returns:
+            Tupla (token_jwt, id_empleado, nombre_empleado)
+            
+        Raises:
+            CredencialesInvalidasException: Si email o password son incorrectos
+        """
+        pass
+"""Puertos de entrada para Empleado."""
+
+from .login_input_port import LoginInputPort
+from .create_empleado_input_port import CreateEmpleadoInputPort
+
+__all__ = ["LoginInputPort", "CreateEmpleadoInputPort"]
+"""Puerto de entrada (input) para caso de uso de creación de Empleado."""
+
+from abc import ABC, abstractmethod
+from src.domain.entities.empleado import Empleado
+
+
+class CreateEmpleadoInputPort(ABC):
+    """Interfaz (puerto) para caso de uso de creación de Empleado."""
+
+    @abstractmethod
+    def ejecutar(
+        self,
+        nombre: str,
+        email: str,
+        password: str,
+        id_area: int,
+        id_cargo: int,
+    ) -> Empleado:
+        """Crea un nuevo empleado.
+        
+        Args:
+            nombre: Nombre del empleado
+            email: Email único del empleado
+            password: Contraseña en texto plano (se hasheará)
+            id_area: ID del área
+            id_cargo: ID del cargo
+            
+        Returns:
+            Empleado creado
+            
+        Raises:
+            EmailYaExisteException: Si el email ya está registrado
+        """
+        pass
+from abc import ABC, abstractmethod
+from typing import List
+from datetime import date
+from src.domain.entities.archivo import Archivo
+
+
+class CreateArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        doi: str,
+        descripcion: str,
+        url_archivo: str,
+        nombre_original: str,
+        id_elaborador: int,
+        fecha_registro: date,
+    ) -> Archivo:
+        pass
+
+
+class GetArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_archivo: int) -> Archivo:
+        pass
+
+
+class ListArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[Archivo]:
+        pass
+
+
+class UpdateArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_archivo: int,
+        doi: str,
+        descripcion: str,
+        url_archivo: str,
+        nombre_original: str,
+        id_elaborador: int,
+        fecha_registro: date,
+    ) -> Archivo:
+        pass
+
+
+class DeleteArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_archivo: int) -> None:
+        pass
+from .archivo_input_ports import (
+    CreateArchivoInputPort,
+    GetArchivoInputPort,
+    ListArchivoInputPort,
+    UpdateArchivoInputPort,
+    DeleteArchivoInputPort,
+)
+
+__all__ = [
+    "CreateArchivoInputPort",
+    "GetArchivoInputPort",
+    "ListArchivoInputPort",
+    "UpdateArchivoInputPort",
+    "DeleteArchivoInputPort",
+]
+from abc import ABC, abstractmethod
+from src.domain.entities.comunicado_destinatario import ComunicadoDestinatario
+
+
+class AsociarComunicadoDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        id_destinatario: int,
+        id_rol_destinatario: int,
+    ) -> ComunicadoDestinatario:
+        pass
+
+
+class DesasociarComunicadoDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_comunicado: int, id_destinatario: int) -> None:
+        pass
+from .comunicado_destinatario_input_ports import (
+    AsociarComunicadoDestinatarioInputPort,
+    DesasociarComunicadoDestinatarioInputPort,
+)
+
+__all__ = [
+    "AsociarComunicadoDestinatarioInputPort",
+    "DesasociarComunicadoDestinatarioInputPort",
+]
+from .emp_cargo_input_ports import AsociarEmpCargoInputPort, DesasociarEmpCargoInputPort
+
+__all__ = ["AsociarEmpCargoInputPort", "DesasociarEmpCargoInputPort"]
+from abc import ABC, abstractmethod
+from datetime import date
+from src.domain.entities.emp_cargo import EmpCargo
+
+
+class AsociarEmpCargoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_empleado: int,
+        id_cargo: int,
+        fecha_inicio: date,
+        fecha_termina: date,
+        id_registro_modificacion: int,
+    ) -> EmpCargo:
+        pass
+
+
+class DesasociarEmpCargoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_empleado: int, id_cargo: int) -> None:
+        pass
+from abc import ABC, abstractmethod
+from typing import List
+from src.domain.entities.catalogo import Catalogo
+
+
+class CreateCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tipo_catalogo: int, descripcion: str) -> Catalogo:
+        pass
+
+
+class GetCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_catalogo: int) -> Catalogo:
+        pass
+
+
+class ListCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[Catalogo]:
+        pass
+
+
+class UpdateCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_catalogo: int, id_tipo_catalogo: int, descripcion: str) -> Catalogo:
+        pass
+
+
+class DeleteCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_catalogo: int) -> None:
+        pass
+from .catalogo_input_ports import (
+    CreateCatalogoInputPort,
+    GetCatalogoInputPort,
+    ListCatalogoInputPort,
+    UpdateCatalogoInputPort,
+    DeleteCatalogoInputPort,
+)
+
+__all__ = [
+    "CreateCatalogoInputPort",
+    "GetCatalogoInputPort",
+    "ListCatalogoInputPort",
+    "UpdateCatalogoInputPort",
+    "DeleteCatalogoInputPort",
+]
+from abc import ABC, abstractmethod
+from typing import List
+from src.domain.entities.rol_responsable import RolResponsable
+
+
+class CreateRolResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, descripcion_rol: str) -> RolResponsable:
+        pass
+
+
+class GetRolResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int) -> RolResponsable:
+        pass
+
+
+class ListRolResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[RolResponsable]:
+        pass
+
+
+class UpdateRolResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int, descripcion_rol: str) -> RolResponsable:
+        pass
+
+
+class DeleteRolResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int) -> None:
+        pass
+from .rol_responsable_input_ports import (
+    CreateRolResponsableInputPort,
+    GetRolResponsableInputPort,
+    ListRolResponsableInputPort,
+    UpdateRolResponsableInputPort,
+    DeleteRolResponsableInputPort,
+)
+
+__all__ = [
+    "CreateRolResponsableInputPort",
+    "GetRolResponsableInputPort",
+    "ListRolResponsableInputPort",
+    "UpdateRolResponsableInputPort",
+    "DeleteRolResponsableInputPort",
+]
+from abc import ABC, abstractmethod
+from typing import List
+from src.domain.entities.rol_destinatario import RolDestinatario
+
+
+class CreateRolDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, descripcion: str) -> RolDestinatario:
+        pass
+
+
+class GetRolDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int) -> RolDestinatario:
+        pass
+
+
+class ListRolDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[RolDestinatario]:
+        pass
+
+
+class UpdateRolDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int, descripcion: str) -> RolDestinatario:
+        pass
+
+
+class DeleteRolDestinatarioInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_rol: int) -> None:
+        pass
+from .rol_destinatario_input_ports import (
+    CreateRolDestinatarioInputPort,
+    GetRolDestinatarioInputPort,
+    ListRolDestinatarioInputPort,
+    UpdateRolDestinatarioInputPort,
+    DeleteRolDestinatarioInputPort,
+)
+
+__all__ = [
+    "CreateRolDestinatarioInputPort",
+    "GetRolDestinatarioInputPort",
+    "ListRolDestinatarioInputPort",
+    "UpdateRolDestinatarioInputPort",
+    "DeleteRolDestinatarioInputPort",
+]
+from abc import ABC, abstractmethod
+from src.domain.entities.tarea_archivo import TareaArchivo
+
+
+class AsociarTareaArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int, id_archivo: int) -> TareaArchivo:
+        pass
+
+
+class DesasociarTareaArchivoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int, id_archivo: int) -> None:
+        pass
+from .tarea_archivo_input_ports import (
+    AsociarTareaArchivoInputPort,
+    DesasociarTareaArchivoInputPort,
+)
+
+__all__ = [
+    "AsociarTareaArchivoInputPort",
+    "DesasociarTareaArchivoInputPort",
+]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from datetime import date
+from src.domain.entities.tarea import Tarea
+
+
+class CreateTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        descripcion: str,
+        fecha_entrega: date,
+        fecha_registro: date,
+        id_estado_tarea: Optional[int],
+    ) -> Tarea:
+        pass
+
+
+class GetTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int) -> Tarea:
+        pass
+
+
+class ListTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[Tarea]:
+        pass
+
+
+class UpdateTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_tarea: int,
+        id_comunicado: int,
+        descripcion: str,
+        fecha_entrega: date,
+        fecha_registro: date,
+        id_estado_tarea: Optional[int],
+    ) -> Tarea:
+        pass
+
+
+class DeleteTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int) -> None:
+        pass
+from .tarea_input_ports import (
+    CreateTareaInputPort,
+    GetTareaInputPort,
+    ListTareaInputPort,
+    UpdateTareaInputPort,
+    DeleteTareaInputPort,
+)
+
+__all__ = [
+    "CreateTareaInputPort",
+    "GetTareaInputPort",
+    "ListTareaInputPort",
+    "UpdateTareaInputPort",
+    "DeleteTareaInputPort",
+]
+from abc import ABC, abstractmethod
+from typing import List
+from src.domain.entities.tipo_catalogo import TipoCatalogo
+
+
+class CreateTipoCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, nombre_tipo_catalogo: str) -> TipoCatalogo:
+        pass
+
+
+class GetTipoCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tipo_catalogo: int) -> TipoCatalogo:
+        pass
+
+
+class ListTipoCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[TipoCatalogo]:
+        pass
+
+
+class UpdateTipoCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tipo_catalogo: int, nombre_tipo_catalogo: str) -> TipoCatalogo:
+        pass
+
+
+class DeleteTipoCatalogoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tipo_catalogo: int) -> None:
+        passfrom .tipo_catalogo_input_ports import (
+    CreateTipoCatalogoInputPort,
+    GetTipoCatalogoInputPort,
+    ListTipoCatalogoInputPort,
+    UpdateTipoCatalogoInputPort,
+    DeleteTipoCatalogoInputPort,
+)
+
+__all__ = [
+    "CreateTipoCatalogoInputPort",
+    "GetTipoCatalogoInputPort",
+    "ListTipoCatalogoInputPort",
+    "UpdateTipoCatalogoInputPort",
+    "DeleteTipoCatalogoInputPort",
+]from abc import ABC, abstractmethod
+from typing import List
+from src.domain.entities.estado_tarea import EstadoTarea
+
+
+class CreateEstadoTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, nombre_estado: str) -> EstadoTarea:
+        pass
+
+
+class GetEstadoTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_estado_tarea: int) -> EstadoTarea:
+        pass
+
+
+class ListEstadoTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[EstadoTarea]:
+        pass
+
+
+class UpdateEstadoTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_estado_tarea: int, nombre_estado: str) -> EstadoTarea:
+        pass
+
+
+class DeleteEstadoTareaInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_estado_tarea: int) -> None:
+        pass
+from .estado_tarea_input_ports import (
+    CreateEstadoTareaInputPort,
+    GetEstadoTareaInputPort,
+    ListEstadoTareaInputPort,
+    UpdateEstadoTareaInputPort,
+    DeleteEstadoTareaInputPort,
+)
+
+__all__ = [
+    "CreateEstadoTareaInputPort",
+    "GetEstadoTareaInputPort",
+    "ListEstadoTareaInputPort",
+    "UpdateEstadoTareaInputPort",
+    "DeleteEstadoTareaInputPort",
+]
+from abc import ABC, abstractmethod
+from src.domain.entities.comunicado_adjunto import ComunicadoAdjunto
+
+
+class AsociarComunicadoAdjuntoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_comunicado: int, id_archivo: int) -> ComunicadoAdjunto:
+        pass
+
+
+class DesasociarComunicadoAdjuntoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_comunicado: int, id_archivo: int) -> None:
+        pass
+from .comunicado_adjunto_input_ports import (
+    AsociarComunicadoAdjuntoInputPort,
+    DesasociarComunicadoAdjuntoInputPort,
+)
+
+__all__ = [
+    "AsociarComunicadoAdjuntoInputPort",
+    "DesasociarComunicadoAdjuntoInputPort",
+]
+from abc import ABC, abstractmethod
+from src.domain.entities.tarea_responsable import TareaResponsable
+
+
+class AsociarTareaResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int, id_responsable: int, id_rol: int) -> TareaResponsable:
+        pass
+
+
+class DesasociarTareaResponsableInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_tarea: int, id_responsable: int) -> None:
+        pass
+from .tarea_responsable_input_ports import (
+    AsociarTareaResponsableInputPort,
+    DesasociarTareaResponsableInputPort,
+)
+
+__all__ = [
+    "AsociarTareaResponsableInputPort",
+    "DesasociarTareaResponsableInputPort",
+]
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from datetime import date
+from src.domain.entities.comunicado import Comunicado
+
+
+class CreateComunicadoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        doi: str,
+        num_comunicado: str,
+        id_emisor: int,
+        fecha_recepcion: date,
+        id_destinatario: int,
+        fecha_registro: date,
+        id_registro: int,
+        id_metodo_recepcion: int,
+        tema: str,
+        id_tipo_comunicado: int,
+        observaciones: Optional[str],
+    ) -> Comunicado:
+        pass
+
+
+class GetComunicadoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_comunicado: int) -> Comunicado:
+        pass
+
+
+class ListComunicadoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, skip: int, limit: int) -> List[Comunicado]:
+        pass
+
+
+class UpdateComunicadoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        doi: str,
+        num_comunicado: str,
+        id_emisor: int,
+        fecha_recepcion: date,
+        id_destinatario: int,
+        fecha_registro: date,
+        id_registro: int,
+        id_metodo_recepcion: int,
+        tema: str,
+        id_tipo_comunicado: int,
+        observaciones: Optional[str],
+    ) -> Comunicado:
+        pass
+
+
+class DeleteComunicadoInputPort(ABC):
+    @abstractmethod
+    def ejecutar(self, id_comunicado: int) -> None:
+        pass
+from .comunicado_input_ports import (
+    CreateComunicadoInputPort,
+    GetComunicadoInputPort,
+    ListComunicadoInputPort,
+    UpdateComunicadoInputPort,
+    DeleteComunicadoInputPort,
+)
+
+__all__ = [
+    "CreateComunicadoInputPort",
+    "GetComunicadoInputPort",
+    "ListComunicadoInputPort",
+    "UpdateComunicadoInputPort",
+    "DeleteComunicadoInputPort",
+]
+class RecursoNoEncontradoException(Exception):
+    pass
+
+
+class AsociacionYaExisteException(Exception):
+    pass
+"""Excepciones del dominio."""
+
+
+class DomainException(Exception):
+    """Clase base para todas las excepciones del dominio."""
+    pass
+
+
+class CredencialesInvalidasException(DomainException):
+    """Se lanza cuando las credenciales (email/password) son inválidas."""
+    pass
+
+
+class EmailYaExisteException(DomainException):
+    """Se lanza cuando se intenta crear un empleado con un email ya registrado."""
+    pass
+
+
+class EmpleadoNoEncontradoException(DomainException):
+    """Se lanza cuando no se encuentra un empleado."""
+    pass
+
+
+from .crud_exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+
+__all__ = [
+    "DomainException",
+    "CredencialesInvalidasException",
+    "EmailYaExisteException",
+    "EmpleadoNoEncontradoException",
+    "RecursoNoEncontradoException",
+    "AsociacionYaExisteException",
+]
+from dataclasses import dataclass
+from datetime import date
+from typing import Optional
+
+
+@dataclass
+class Empleado:
+    """Entidad de dominio Empleado.
+    
+    Representa un empleado del sistema con datos básicos y relaciones a área y cargo.
+    """
+    id_empleado: int
+    nombre: str
+    email: str
+    password_hash: str
+    id_area: int
+    id_cargo: int
+    
+    @staticmethod
+    def crear(
+        nombre: str,
+        email: str,
+        password_hash: str,
+        id_area: int,
+        id_cargo: int,
+    ) -> "Empleado":
+        """Factory method para crear una nueva instancia de Empleado."""
+        return Empleado(
+            id_empleado=0,  # Será asignado por la BD
+            nombre=nombre,
+            email=email,
+            password_hash=password_hash,
+            id_area=id_area,
+            id_cargo=id_cargo,
+        )
+from .empleado import Empleado
+
+__all__ = ["Empleado"]
+from .archivo import Archivo
+
+__all__ = ["Archivo"]from dataclasses import dataclass
+from datetime import date
+
+
+@dataclass
+class Archivo:
+    """Entidad de dominio Archivo.
+    
+    Representa un archivo (documento, evidencia) en el sistema.
+    Puede ser adjunto de un Comunicado o de una Tarea.
+    """
+    id_archivo: int
+    doi: str
+    descripcion: str
+    url_archivo: str
+    nombre_original: str
+    id_elaborador: int
+    fecha_registro: date
+from dataclasses import dataclass
+
+
+@dataclass
+class ComunicadoDestinatario:
+    """Entidad de dominio ComunicadoDestinatario.
+    
+    Asociativa entre Comunicado y Destinatario, con rol específico.
+    """
+    id_comunicado: int
+    id_destinatario: int
+    id_rol_destinatario: int
+from .comunicado_destinatario import ComunicadoDestinatario
+
+__all__ = ["ComunicadoDestinatario"]from .emp_cargo import EmpCargo
+
+__all__ = ["EmpCargo"]from dataclasses import dataclass
+from datetime import date
+
+
+@dataclass
+class EmpCargo:
+    """Entidad de dominio EmpCargo.
+    
+    Historial de cargos de un empleado con fechas de inicio y término.
+    """
+    id_empleado: int
+    id_cargo: int
+    fecha_inicio: date
+    fecha_termina: date
+    id_registro_modificacion: int
+from dataclasses import dataclass
+
+
+@dataclass
+class Catalogo:
+    """Entidad de dominio Catalogo.
+    
+    Catálogo genérico que agrupa tipos de datos comunes como
+    TipoComunicado, MetodoRecepcion, etc.
+    """
+    id_catalogo: int
+    id_tipo_catalogo: int
+    descripcion: str
+from .catalogo import Catalogo
+
+__all__ = ["Catalogo"]from dataclasses import dataclass
+
+
+@dataclass
+class RolResponsable:
+    """Entidad de dominio Rol_Responsable.
+    
+    Catálogo separado para roles de responsables en Tarea_Responsable.
+    """
+    id_rol: int
+    descripcion_rol: str
+from .rol_responsable import RolResponsable
+
+__all__ = ["RolResponsable"]
+from .rol_destinatario import RolDestinatario
+
+__all__ = ["RolDestinatario"]
+from dataclasses import dataclass
+
+
+@dataclass
+class RolDestinatario:
+    """Entidad de dominio Rol_Destinatario.
+    
+    Catálogo separado para roles de destinatarios en Comunicado_Destinatario.
+    Ejemplo: Principal, Con copia, Informativo.
+    """
+    id_rol: int
+    descripcion: str
+from dataclasses import dataclass
+
+
+@dataclass
+class TareaArchivo:
+    """Entidad de dominio TareaArchivo.
+    
+    Asociativa entre Tarea y Archivo.
+    Una tarea puede tener múltiples archivos adjuntos.
+    """
+    id_tarea: int
+    id_archivo: int
+from .tarea_archivo import TareaArchivo
+
+__all__ = ["TareaArchivo"]from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Tarea:
+    """Entidad de dominio Tarea.
+    
+    Representa una tarea derivada de un comunicado, con estado específico en EstadoTarea.
+    """
+    id_tarea: int
+    id_comunicado: int
+    descripcion: str
+    fecha_entrega: "date"
+    fecha_registro: "date"
+    id_estado_tarea: Optional[int] = None
+from .tarea import Tarea
+
+__all__ = ["Tarea"]
+from dataclasses import dataclass
+
+
+@dataclass
+class TipoCatalogo:
+    """Entidad de dominio TipoCatalogo.
+    
+    Define los tipos de catálogos existentes.
+    Ejemplos: TipoComunicado, MetodoRecepcion.
+    """
+    id_tipo_catalogo: int
+    nombre_tipo_catalogo: str
+from .tipo_catalogo import TipoCatalogo
+
+__all__ = ["TipoCatalogo"]from dataclasses import dataclass
+
+
+@dataclass
+class EstadoTarea:
+    """Entidad de dominio EstadoTarea.
+    
+    Catálogo específico para estados de Tarea.
+    Ejemplos: Asignada, Cancelada, Pospuesta, Entregada, Rechazada, Terminada.
+    """
+    id_estado_tarea: int
+    nombre_estado: str
+from .estado_tarea import EstadoTarea
+
+__all__ = ["EstadoTarea"]
+from dataclasses import dataclass
+
+
+@dataclass
+class ComunicadoAdjunto:
+    """Entidad de dominio Comunicado_Adjunto.
+    
+    Asociativa entre Comunicado y Archivo. Un Comunicado puede tener varios archivos adjuntos.
+    """
+    id_comunicado: int
+    id_archivo: int
+from .comunicado_adjunto import ComunicadoAdjunto
+
+__all__ = ["ComunicadoAdjunto"]
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Estado:
+    """Entidad de dominio Estado (genérico).
+    
+    Catálogo genérico para estados de otras entidades (Comunicado, Archivo, etc.).
+    NO se usa para Tarea (ver EstadoTarea).
+    Estructura definitiva pendiente.
+    """
+    id_estado: int
+    nombre_estado: str
+from .estado import Estado
+
+__all__ = ["Estado"]
+from dataclasses import dataclass
+
+
+@dataclass
+class TareaResponsable:
+    """Entidad de dominio TareaResponsable.
+    
+    Asociativa entre Tarea y Empleado (responsable), con rol.
+    """
+    id_tarea: int
+    id_responsable: int
+    id_rol: int
+from .tarea_responsable import TareaResponsable
+
+__all__ = ["TareaResponsable"]from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class Comunicado:
+    """Entidad de dominio Comunicado.
+    
+    Representa un comunicado (antes Oficio) sin campo directo IdArchivo.
+    Los archivos adjuntos se acceden a través de la asociativa Comunicado_adjunto.
+    """
+    id_comunicado: int
+    doi: str
+    num_comunicado: str
+    id_emisor: int
+    fecha_recepcion: "date"
+    id_destinatario: int
+    fecha_registro: "date"
+    id_registro: int
+    id_metodo_recepcion: int
+    tema: str
+    id_tipo_comunicado: int
+    observaciones: Optional[str] = None
+from .comunicado import Comunicado
+
+__all__ = ["Comunicado"]
+"""Caso de uso: Crear Empleado (por administrador)."""
+
+from src.domain.ports.input.empleado import CreateEmpleadoInputPort
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.entities.empleado import Empleado
+from src.domain.exceptions import EmailYaExisteException
+from src.infrastructure.config.security import hash_password
+
+
+class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
+    """Caso de uso para crear un nuevo empleado.
+    
+    Solo para administrador en esta fase.
+    Sin dependencias directas de FastAPI ni ORM.
+    """
+
+    def __init__(self, empleado_repository: EmpleadoRepositoryPort):
+        """
+        Args:
+            empleado_repository: Implementación del puerto de repositorio
+        """
+        self.empleado_repository = empleado_repository
+
+    def ejecutar(
+        self,
+        nombre: str,
+        email: str,
+        password: str,
+        id_area: int,
+        id_cargo: int,
+    ) -> Empleado:
+        """Crea un nuevo empleado.
+        
+        Args:
+            nombre: Nombre del empleado
+            email: Email único
+            password: Contraseña en texto plano
+            id_area: ID del área
+            id_cargo: ID del cargo
+            
+        Returns:
+            Empleado creado
+            
+        Raises:
+            EmailYaExisteException: Si el email ya existe
+        """
+        # Verificar que el email no exista
+        if self.empleado_repository.existe_email(email):
+            raise EmailYaExisteException(f"El email {email} ya está registrado.")
+        
+        # Hashear contraseña
+        password_hash = hash_password(password)
+        
+        # Crear instancia de Empleado (sin ID, será asignado por BD)
+        empleado = Empleado.crear(
+            nombre=nombre,
+            email=email,
+            password_hash=password_hash,
+            id_area=id_area,
+            id_cargo=id_cargo,
+        )
+        
+        # Guardar en repositorio
+        empleado_guardado = self.empleado_repository.crear(empleado)
+        
+        return empleado_guardado
+"""Caso de uso: Login de Empleado."""
+
+from typing import Tuple
+from src.domain.ports.input.empleado import LoginInputPort
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.exceptions import CredencialesInvalidasException
+from src.infrastructure.config.security import (
+    verify_password,
+    crear_token_jwt,
+)
+
+
+class LoginUseCase(LoginInputPort):
+    """Caso de uso para autenticación de empleado (login).
+    
+    Sin dependencias directas de FastAPI ni ORM.
+    Solo depende de las interfaces del dominio (puertos).
+    """
+
+    def __init__(self, empleado_repository: EmpleadoRepositoryPort):
+        """
+        Args:
+            empleado_repository: Implementación del puerto de repositorio
+        """
+        self.empleado_repository = empleado_repository
+
+    def ejecutar(self, email: str, password: str) -> Tuple[str, int, str]:
+        """Ejecuta la lógica de login.
+        
+        Args:
+            email: Email del empleado
+            password: Contraseña en texto plano
+            
+        Returns:
+            Tupla (token_jwt, id_empleado, nombre_empleado)
+            
+        Raises:
+            CredencialesInvalidasException: Si las credenciales son inválidas
+        """
+        # Buscar empleado por email
+        empleado = self.empleado_repository.obtener_por_email(email)
+        
+        if not empleado:
+            # No revelar si el email existe o no (por seguridad)
+            raise CredencialesInvalidasException(
+                "Las credenciales proporcionadas son inválidas."
+            )
+        
+        # Verificar contraseña
+        if not verify_password(password, empleado.password_hash):
+            raise CredencialesInvalidasException(
+                "Las credenciales proporcionadas son inválidas."
+            )
+        
+        # Crear JWT
+        token = crear_token_jwt(empleado.id_empleado, empleado.email, empleado.nombre)
+        
+        return token, empleado.id_empleado, empleado.nombre
+"""Casos de uso del módulo Empleado."""
+
+from .login_use_case import LoginUseCase
+from .create_empleado_use_case import CreateEmpleadoUseCase
+
+__all__ = ["LoginUseCase", "CreateEmpleadoUseCase"]
+from typing import List
+from datetime import date
+from src.domain.entities.archivo import Archivo
+from src.domain.ports.input.archivo import (
+    CreateArchivoInputPort,
+    GetArchivoInputPort,
+    ListArchivoInputPort,
+    UpdateArchivoInputPort,
+    DeleteArchivoInputPort,
+)
+from src.domain.ports.output.archivo import ArchivoRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateArchivoUseCase(CreateArchivoInputPort):
+    def __init__(self, repository: ArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        doi: str,
+        descripcion: str,
+        url_archivo: str,
+        nombre_original: str,
+        id_elaborador: int,
+        fecha_registro: date,
+    ) -> Archivo:
+        entity = Archivo(
+            id_archivo=0,
+            doi=doi,
+            descripcion=descripcion,
+            url_archivo=url_archivo,
+            nombre_original=nombre_original,
+            id_elaborador=id_elaborador,
+            fecha_registro=fecha_registro,
+        )
+        return self.repository.crear(entity)
+
+
+class GetArchivoUseCase(GetArchivoInputPort):
+    def __init__(self, repository: ArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_archivo: int) -> Archivo:
+        resultado = self.repository.obtener_por_id(id_archivo)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"Archivo {id_archivo} no encontrado.")
+        return resultado
+
+
+class ListArchivoUseCase(ListArchivoInputPort):
+    def __init__(self, repository: ArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[Archivo]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateArchivoUseCase(UpdateArchivoInputPort):
+    def __init__(self, repository: ArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        id_archivo: int,
+        doi: str,
+        descripcion: str,
+        url_archivo: str,
+        nombre_original: str,
+        id_elaborador: int,
+        fecha_registro: date,
+    ) -> Archivo:
+        existente = self.repository.obtener_por_id(id_archivo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Archivo {id_archivo} no encontrado.")
+        existente.doi = doi
+        existente.descripcion = descripcion
+        existente.url_archivo = url_archivo
+        existente.nombre_original = nombre_original
+        existente.id_elaborador = id_elaborador
+        existente.fecha_registro = fecha_registro
+        return self.repository.actualizar(existente)
+
+
+class DeleteArchivoUseCase(DeleteArchivoInputPort):
+    def __init__(self, repository: ArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_archivo: int) -> None:
+        existente = self.repository.obtener_por_id(id_archivo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Archivo {id_archivo} no encontrado.")
+        self.repository.eliminar(id_archivo)
+from .archivo_use_cases import (
+    CreateArchivoUseCase,
+    GetArchivoUseCase,
+    ListArchivoUseCase,
+    UpdateArchivoUseCase,
+    DeleteArchivoUseCase,
+)
+
+__all__ = [
+    "CreateArchivoUseCase",
+    "GetArchivoUseCase",
+    "ListArchivoUseCase",
+    "UpdateArchivoUseCase",
+    "DeleteArchivoUseCase",
+]
+from src.domain.entities.comunicado_destinatario import ComunicadoDestinatario
+from src.domain.ports.input.comunicado_destinatario import (
+    AsociarComunicadoDestinatarioInputPort,
+    DesasociarComunicadoDestinatarioInputPort,
+)
+from src.domain.ports.output.comunicado_destinatario import ComunicadoDestinatarioRepositoryPort
+from src.domain.ports.output.comunicado import ComunicadoRepositoryPort
+from src.domain.exceptions.crud_exceptions import (
+    RecursoNoEncontradoException,
+    AsociacionYaExisteException,
+)
+
+
+class AsociarComunicadoDestinatarioUseCase(AsociarComunicadoDestinatarioInputPort):
+    def __init__(
+        self,
+        repository: ComunicadoDestinatarioRepositoryPort,
+        comunicado_repository: ComunicadoRepositoryPort,
+    ):
+        self.repository = repository
+        self.comunicado_repository = comunicado_repository
+
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        id_destinatario: int,
+        id_rol_destinatario: int,
+    ) -> ComunicadoDestinatario:
+        if not self.comunicado_repository.obtener_por_id(id_comunicado):
+            raise RecursoNoEncontradoException(f"Comunicado {id_comunicado} no encontrado.")
+        if self.repository.obtener(id_comunicado, id_destinatario):
+            raise AsociacionYaExisteException(
+                f"Destinatario {id_destinatario} ya asociado al comunicado {id_comunicado}."
+            )
+        asociacion = ComunicadoDestinatario(
+            id_comunicado=id_comunicado,
+            id_destinatario=id_destinatario,
+            id_rol_destinatario=id_rol_destinatario,
+        )
+        return self.repository.crear(asociacion)
+
+
+class DesasociarComunicadoDestinatarioUseCase(DesasociarComunicadoDestinatarioInputPort):
+    def __init__(self, repository: ComunicadoDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_comunicado: int, id_destinatario: int) -> None:
+        if not self.repository.obtener(id_comunicado, id_destinatario):
+            raise RecursoNoEncontradoException(
+                f"Asociacion comunicado {id_comunicado} - destinatario {id_destinatario} no encontrada."
+            )
+        self.repository.eliminar(id_comunicado, id_destinatario)
+from .comunicado_destinatario_use_cases import (
+    AsociarComunicadoDestinatarioUseCase,
+    DesasociarComunicadoDestinatarioUseCase,
+)
+
+__all__ = [
+    "AsociarComunicadoDestinatarioUseCase",
+    "DesasociarComunicadoDestinatarioUseCase",
+]
+from .emp_cargo_use_cases import AsociarEmpCargoUseCase, DesasociarEmpCargoUseCase
+
+__all__ = ["AsociarEmpCargoUseCase", "DesasociarEmpCargoUseCase"]
+from datetime import date
+from src.domain.entities.emp_cargo import EmpCargo
+from src.domain.ports.input.emp_cargo import AsociarEmpCargoInputPort, DesasociarEmpCargoInputPort
+from src.domain.ports.output.emp_cargo import EmpCargoRepositoryPort
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.exceptions.crud_exceptions import (
+    RecursoNoEncontradoException,
+    AsociacionYaExisteException,
+)
+
+
+class AsociarEmpCargoUseCase(AsociarEmpCargoInputPort):
+    def __init__(
+        self,
+        repository: EmpCargoRepositoryPort,
+        empleado_repository: EmpleadoRepositoryPort,
+    ):
+        self.repository = repository
+        self.empleado_repository = empleado_repository
+
+    def ejecutar(
+        self,
+        id_empleado: int,
+        id_cargo: int,
+        fecha_inicio: date,
+        fecha_termina: date,
+        id_registro_modificacion: int,
+    ) -> EmpCargo:
+        if not self.empleado_repository.obtener_por_id(id_empleado):
+            raise RecursoNoEncontradoException(f"Empleado {id_empleado} no encontrado.")
+        if self.repository.obtener(id_empleado, id_cargo):
+            raise AsociacionYaExisteException(
+                f"Cargo {id_cargo} ya asociado al empleado {id_empleado}."
+            )
+        emp_cargo = EmpCargo(
+            id_empleado=id_empleado,
+            id_cargo=id_cargo,
+            fecha_inicio=fecha_inicio,
+            fecha_termina=fecha_termina,
+            id_registro_modificacion=id_registro_modificacion,
+        )
+        return self.repository.crear(emp_cargo)
+
+
+class DesasociarEmpCargoUseCase(DesasociarEmpCargoInputPort):
+    def __init__(self, repository: EmpCargoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_empleado: int, id_cargo: int) -> None:
+        if not self.repository.obtener(id_empleado, id_cargo):
+            raise RecursoNoEncontradoException(
+                f"Asociacion empleado {id_empleado} - cargo {id_cargo} no encontrada."
+            )
+        self.repository.eliminar(id_empleado, id_cargo)
+from typing import List
+from src.domain.entities.catalogo import Catalogo
+from src.domain.ports.input.catalogo import (
+    CreateCatalogoInputPort,
+    GetCatalogoInputPort,
+    ListCatalogoInputPort,
+    UpdateCatalogoInputPort,
+    DeleteCatalogoInputPort,
+)
+from src.domain.ports.output.catalogo import CatalogoRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateCatalogoUseCase(CreateCatalogoInputPort):
+    def __init__(self, repository: CatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tipo_catalogo: int, descripcion: str) -> Catalogo:
+        catalogo = Catalogo(id_catalogo=0, id_tipo_catalogo=id_tipo_catalogo, descripcion=descripcion)
+        return self.repository.crear(catalogo)
+
+
+class GetCatalogoUseCase(GetCatalogoInputPort):
+    def __init__(self, repository: CatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_catalogo: int) -> Catalogo:
+        resultado = self.repository.obtener_por_id(id_catalogo)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"Catalogo {id_catalogo} no encontrado.")
+        return resultado
+
+
+class ListCatalogoUseCase(ListCatalogoInputPort):
+    def __init__(self, repository: CatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[Catalogo]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateCatalogoUseCase(UpdateCatalogoInputPort):
+    def __init__(self, repository: CatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_catalogo: int, id_tipo_catalogo: int, descripcion: str) -> Catalogo:
+        existente = self.repository.obtener_por_id(id_catalogo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Catalogo {id_catalogo} no encontrado.")
+        existente.id_tipo_catalogo = id_tipo_catalogo
+        existente.descripcion = descripcion
+        return self.repository.actualizar(existente)
+
+
+class DeleteCatalogoUseCase(DeleteCatalogoInputPort):
+    def __init__(self, repository: CatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_catalogo: int) -> None:
+        existente = self.repository.obtener_por_id(id_catalogo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Catalogo {id_catalogo} no encontrado.")
+        self.repository.eliminar(id_catalogo)
+from .catalogo_use_cases import (
+    CreateCatalogoUseCase,
+    GetCatalogoUseCase,
+    ListCatalogoUseCase,
+    UpdateCatalogoUseCase,
+    DeleteCatalogoUseCase,
+)
+
+__all__ = [
+    "CreateCatalogoUseCase",
+    "GetCatalogoUseCase",
+    "ListCatalogoUseCase",
+    "UpdateCatalogoUseCase",
+    "DeleteCatalogoUseCase",
+]
+from typing import List
+from src.domain.entities.rol_responsable import RolResponsable
+from src.domain.ports.input.rol_responsable import (
+    CreateRolResponsableInputPort,
+    GetRolResponsableInputPort,
+    ListRolResponsableInputPort,
+    UpdateRolResponsableInputPort,
+    DeleteRolResponsableInputPort,
+)
+from src.domain.ports.output.rol_responsable import RolResponsableRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateRolResponsableUseCase(CreateRolResponsableInputPort):
+    def __init__(self, repository: RolResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, descripcion_rol: str) -> RolResponsable:
+        entity = RolResponsable(id_rol=0, descripcion_rol=descripcion_rol)
+        return self.repository.crear(entity)
+
+
+class GetRolResponsableUseCase(GetRolResponsableInputPort):
+    def __init__(self, repository: RolResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int) -> RolResponsable:
+        resultado = self.repository.obtener_por_id(id_rol)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"RolResponsable {id_rol} no encontrado.")
+        return resultado
+
+
+class ListRolResponsableUseCase(ListRolResponsableInputPort):
+    def __init__(self, repository: RolResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[RolResponsable]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateRolResponsableUseCase(UpdateRolResponsableInputPort):
+    def __init__(self, repository: RolResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int, descripcion_rol: str) -> RolResponsable:
+        existente = self.repository.obtener_por_id(id_rol)
+        if not existente:
+            raise RecursoNoEncontradoException(f"RolResponsable {id_rol} no encontrado.")
+        existente.descripcion_rol = descripcion_rol
+        return self.repository.actualizar(existente)
+
+
+class DeleteRolResponsableUseCase(DeleteRolResponsableInputPort):
+    def __init__(self, repository: RolResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int) -> None:
+        existente = self.repository.obtener_por_id(id_rol)
+        if not existente:
+            raise RecursoNoEncontradoException(f"RolResponsable {id_rol} no encontrado.")
+        self.repository.eliminar(id_rol)
+from .rol_responsable_use_cases import (
+    CreateRolResponsableUseCase,
+    GetRolResponsableUseCase,
+    ListRolResponsableUseCase,
+    UpdateRolResponsableUseCase,
+    DeleteRolResponsableUseCase,
+)
+
+__all__ = [
+    "CreateRolResponsableUseCase",
+    "GetRolResponsableUseCase",
+    "ListRolResponsableUseCase",
+    "UpdateRolResponsableUseCase",
+    "DeleteRolResponsableUseCase",
+]
+from typing import List
+from src.domain.entities.rol_destinatario import RolDestinatario
+from src.domain.ports.input.rol_destinatario import (
+    CreateRolDestinatarioInputPort,
+    GetRolDestinatarioInputPort,
+    ListRolDestinatarioInputPort,
+    UpdateRolDestinatarioInputPort,
+    DeleteRolDestinatarioInputPort,
+)
+from src.domain.ports.output.rol_destinatario import RolDestinatarioRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateRolDestinatarioUseCase(CreateRolDestinatarioInputPort):
+    def __init__(self, repository: RolDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, descripcion: str) -> RolDestinatario:
+        entity = RolDestinatario(id_rol=0, descripcion=descripcion)
+        return self.repository.crear(entity)
+
+
+class GetRolDestinatarioUseCase(GetRolDestinatarioInputPort):
+    def __init__(self, repository: RolDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int) -> RolDestinatario:
+        resultado = self.repository.obtener_por_id(id_rol)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
+        return resultado
+
+
+class ListRolDestinatarioUseCase(ListRolDestinatarioInputPort):
+    def __init__(self, repository: RolDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[RolDestinatario]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateRolDestinatarioUseCase(UpdateRolDestinatarioInputPort):
+    def __init__(self, repository: RolDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int, descripcion: str) -> RolDestinatario:
+        existente = self.repository.obtener_por_id(id_rol)
+        if not existente:
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
+        existente.descripcion = descripcion
+        return self.repository.actualizar(existente)
+
+
+class DeleteRolDestinatarioUseCase(DeleteRolDestinatarioInputPort):
+    def __init__(self, repository: RolDestinatarioRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_rol: int) -> None:
+        existente = self.repository.obtener_por_id(id_rol)
+        if not existente:
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
+        self.repository.eliminar(id_rol)
+from .rol_destinatario_use_cases import (
+    CreateRolDestinatarioUseCase,
+    GetRolDestinatarioUseCase,
+    ListRolDestinatarioUseCase,
+    UpdateRolDestinatarioUseCase,
+    DeleteRolDestinatarioUseCase,
+)
+
+__all__ = [
+    "CreateRolDestinatarioUseCase",
+    "GetRolDestinatarioUseCase",
+    "ListRolDestinatarioUseCase",
+    "UpdateRolDestinatarioUseCase",
+    "DeleteRolDestinatarioUseCase",
+]
+from src.domain.entities.tarea_archivo import TareaArchivo
+from src.domain.ports.input.tarea_archivo import (
+    AsociarTareaArchivoInputPort,
+    DesasociarTareaArchivoInputPort,
+)
+from src.domain.ports.output.tarea_archivo import TareaArchivoRepositoryPort
+from src.domain.ports.output.tarea import TareaRepositoryPort
+from src.domain.ports.output.archivo import ArchivoRepositoryPort
+from src.domain.exceptions.crud_exceptions import (
+    RecursoNoEncontradoException,
+    AsociacionYaExisteException,
+)
+
+
+class AsociarTareaArchivoUseCase(AsociarTareaArchivoInputPort):
+    def __init__(
+        self,
+        repository: TareaArchivoRepositoryPort,
+        tarea_repository: TareaRepositoryPort,
+        archivo_repository: ArchivoRepositoryPort,
+    ):
+        self.repository = repository
+        self.tarea_repository = tarea_repository
+        self.archivo_repository = archivo_repository
+
+    def ejecutar(self, id_tarea: int, id_archivo: int) -> TareaArchivo:
+        if not self.tarea_repository.obtener_por_id(id_tarea):
+            raise RecursoNoEncontradoException(f"Tarea {id_tarea} no encontrada.")
+        if not self.archivo_repository.obtener_por_id(id_archivo):
+            raise RecursoNoEncontradoException(f"Archivo {id_archivo} no encontrado.")
+        if self.repository.obtener(id_tarea, id_archivo):
+            raise AsociacionYaExisteException(
+                f"Archivo {id_archivo} ya asociado a la tarea {id_tarea}."
+            )
+        asociacion = TareaArchivo(id_tarea=id_tarea, id_archivo=id_archivo)
+        return self.repository.crear(asociacion)
+
+
+class DesasociarTareaArchivoUseCase(DesasociarTareaArchivoInputPort):
+    def __init__(self, repository: TareaArchivoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tarea: int, id_archivo: int) -> None:
+        if not self.repository.obtener(id_tarea, id_archivo):
+            raise RecursoNoEncontradoException(
+                f"Asociacion tarea {id_tarea} - archivo {id_archivo} no encontrada."
+            )
+        self.repository.eliminar(id_tarea, id_archivo)
+from .tarea_archivo_use_cases import (
+    AsociarTareaArchivoUseCase,
+    DesasociarTareaArchivoUseCase,
+)
+
+__all__ = [
+    "AsociarTareaArchivoUseCase",
+    "DesasociarTareaArchivoUseCase",
+]
+from typing import List, Optional
+from datetime import date
+from src.domain.entities.tarea import Tarea
+from src.domain.ports.input.tarea import (
+    CreateTareaInputPort,
+    GetTareaInputPort,
+    ListTareaInputPort,
+    UpdateTareaInputPort,
+    DeleteTareaInputPort,
+)
+from src.domain.ports.output.tarea import TareaRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateTareaUseCase(CreateTareaInputPort):
+    def __init__(self, repository: TareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        descripcion: str,
+        fecha_entrega: date,
+        fecha_registro: date,
+        id_estado_tarea: Optional[int],
+    ) -> Tarea:
+        entity = Tarea(
+            id_tarea=0,
+            id_comunicado=id_comunicado,
+            descripcion=descripcion,
+            fecha_entrega=fecha_entrega,
+            fecha_registro=fecha_registro,
+            id_estado_tarea=id_estado_tarea,
+        )
+        return self.repository.crear(entity)
+
+
+class GetTareaUseCase(GetTareaInputPort):
+    def __init__(self, repository: TareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tarea: int) -> Tarea:
+        resultado = self.repository.obtener_por_id(id_tarea)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"Tarea {id_tarea} no encontrada.")
+        return resultado
+
+
+class ListTareaUseCase(ListTareaInputPort):
+    def __init__(self, repository: TareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[Tarea]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateTareaUseCase(UpdateTareaInputPort):
+    def __init__(self, repository: TareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        id_tarea: int,
+        id_comunicado: int,
+        descripcion: str,
+        fecha_entrega: date,
+        fecha_registro: date,
+        id_estado_tarea: Optional[int],
+    ) -> Tarea:
+        existente = self.repository.obtener_por_id(id_tarea)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Tarea {id_tarea} no encontrada.")
+        existente.id_comunicado = id_comunicado
+        existente.descripcion = descripcion
+        existente.fecha_entrega = fecha_entrega
+        existente.fecha_registro = fecha_registro
+        existente.id_estado_tarea = id_estado_tarea
+        return self.repository.actualizar(existente)
+
+
+class DeleteTareaUseCase(DeleteTareaInputPort):
+    def __init__(self, repository: TareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tarea: int) -> None:
+        existente = self.repository.obtener_por_id(id_tarea)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Tarea {id_tarea} no encontrada.")
+        self.repository.eliminar(id_tarea)
+from .tarea_use_cases import (
+    CreateTareaUseCase,
+    GetTareaUseCase,
+    ListTareaUseCase,
+    UpdateTareaUseCase,
+    DeleteTareaUseCase,
+)
+
+__all__ = [
+    "CreateTareaUseCase",
+    "GetTareaUseCase",
+    "ListTareaUseCase",
+    "UpdateTareaUseCase",
+    "DeleteTareaUseCase",
+]
+from typing import List
+from src.domain.entities.tipo_catalogo import TipoCatalogo
+from src.domain.ports.input.tipo_catalogo import (
+    CreateTipoCatalogoInputPort,
+    GetTipoCatalogoInputPort,
+    ListTipoCatalogoInputPort,
+    UpdateTipoCatalogoInputPort,
+    DeleteTipoCatalogoInputPort,
+)
+from src.domain.ports.output.tipo_catalogo import TipoCatalogoRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateTipoCatalogoUseCase(CreateTipoCatalogoInputPort):
+    def __init__(self, repository: TipoCatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, nombre_tipo_catalogo: str) -> TipoCatalogo:
+        tipo_catalogo = TipoCatalogo(id_tipo_catalogo=0, nombre_tipo_catalogo=nombre_tipo_catalogo)
+        return self.repository.crear(tipo_catalogo)
+
+
+class GetTipoCatalogoUseCase(GetTipoCatalogoInputPort):
+    def __init__(self, repository: TipoCatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tipo_catalogo: int) -> TipoCatalogo:
+        resultado = self.repository.obtener_por_id(id_tipo_catalogo)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"TipoCatalogo {id_tipo_catalogo} no encontrado.")
+        return resultado
+
+
+class ListTipoCatalogoUseCase(ListTipoCatalogoInputPort):
+    def __init__(self, repository: TipoCatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[TipoCatalogo]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateTipoCatalogoUseCase(UpdateTipoCatalogoInputPort):
+    def __init__(self, repository: TipoCatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tipo_catalogo: int, nombre_tipo_catalogo: str) -> TipoCatalogo:
+        existente = self.repository.obtener_por_id(id_tipo_catalogo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"TipoCatalogo {id_tipo_catalogo} no encontrado.")
+        existente.nombre_tipo_catalogo = nombre_tipo_catalogo
+        actualizado = self.repository.actualizar(existente)
+        return actualizado
+
+
+class DeleteTipoCatalogoUseCase(DeleteTipoCatalogoInputPort):
+    def __init__(self, repository: TipoCatalogoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tipo_catalogo: int) -> None:
+        existente = self.repository.obtener_por_id(id_tipo_catalogo)
+        if not existente:
+            raise RecursoNoEncontradoException(f"TipoCatalogo {id_tipo_catalogo} no encontrado.")
+        self.repository.eliminar(id_tipo_catalogo)from .tipo_catalogo_use_cases import (
+    CreateTipoCatalogoUseCase,
+    GetTipoCatalogoUseCase,
+    ListTipoCatalogoUseCase,
+    UpdateTipoCatalogoUseCase,
+    DeleteTipoCatalogoUseCase,
+)
+
+__all__ = [
+    "CreateTipoCatalogoUseCase",
+    "GetTipoCatalogoUseCase",
+    "ListTipoCatalogoUseCase",
+    "UpdateTipoCatalogoUseCase",
+    "DeleteTipoCatalogoUseCase",
+]from typing import List
+from src.domain.entities.estado_tarea import EstadoTarea
+from src.domain.ports.input.estado_tarea import (
+    CreateEstadoTareaInputPort,
+    GetEstadoTareaInputPort,
+    ListEstadoTareaInputPort,
+    UpdateEstadoTareaInputPort,
+    DeleteEstadoTareaInputPort,
+)
+from src.domain.ports.output.estado_tarea import EstadoTareaRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateEstadoTareaUseCase(CreateEstadoTareaInputPort):
+    def __init__(self, repository: EstadoTareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, nombre_estado: str) -> EstadoTarea:
+        entity = EstadoTarea(id_estado_tarea=0, nombre_estado=nombre_estado)
+        return self.repository.crear(entity)
+
+
+class GetEstadoTareaUseCase(GetEstadoTareaInputPort):
+    def __init__(self, repository: EstadoTareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_estado_tarea: int) -> EstadoTarea:
+        resultado = self.repository.obtener_por_id(id_estado_tarea)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"EstadoTarea {id_estado_tarea} no encontrado.")
+        return resultado
+
+
+class ListEstadoTareaUseCase(ListEstadoTareaInputPort):
+    def __init__(self, repository: EstadoTareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[EstadoTarea]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateEstadoTareaUseCase(UpdateEstadoTareaInputPort):
+    def __init__(self, repository: EstadoTareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_estado_tarea: int, nombre_estado: str) -> EstadoTarea:
+        existente = self.repository.obtener_por_id(id_estado_tarea)
+        if not existente:
+            raise RecursoNoEncontradoException(f"EstadoTarea {id_estado_tarea} no encontrado.")
+        existente.nombre_estado = nombre_estado
+        return self.repository.actualizar(existente)
+
+
+class DeleteEstadoTareaUseCase(DeleteEstadoTareaInputPort):
+    def __init__(self, repository: EstadoTareaRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_estado_tarea: int) -> None:
+        existente = self.repository.obtener_por_id(id_estado_tarea)
+        if not existente:
+            raise RecursoNoEncontradoException(f"EstadoTarea {id_estado_tarea} no encontrado.")
+        self.repository.eliminar(id_estado_tarea)
+from .estado_tarea_use_cases import (
+    CreateEstadoTareaUseCase,
+    GetEstadoTareaUseCase,
+    ListEstadoTareaUseCase,
+    UpdateEstadoTareaUseCase,
+    DeleteEstadoTareaUseCase,
+)
+
+__all__ = [
+    "CreateEstadoTareaUseCase",
+    "GetEstadoTareaUseCase",
+    "ListEstadoTareaUseCase",
+    "UpdateEstadoTareaUseCase",
+    "DeleteEstadoTareaUseCase",
+]
+from src.domain.entities.comunicado_adjunto import ComunicadoAdjunto
+from src.domain.ports.input.comunicado_adjunto import (
+    AsociarComunicadoAdjuntoInputPort,
+    DesasociarComunicadoAdjuntoInputPort,
+)
+from src.domain.ports.output.comunicado_adjunto import ComunicadoAdjuntoRepositoryPort
+from src.domain.ports.output.comunicado import ComunicadoRepositoryPort
+from src.domain.ports.output.archivo import ArchivoRepositoryPort
+from src.domain.exceptions.crud_exceptions import (
+    RecursoNoEncontradoException,
+    AsociacionYaExisteException,
+)
+
+
+class AsociarComunicadoAdjuntoUseCase(AsociarComunicadoAdjuntoInputPort):
+    def __init__(
+        self,
+        repository: ComunicadoAdjuntoRepositoryPort,
+        comunicado_repository: ComunicadoRepositoryPort,
+        archivo_repository: ArchivoRepositoryPort,
+    ):
+        self.repository = repository
+        self.comunicado_repository = comunicado_repository
+        self.archivo_repository = archivo_repository
+
+    def ejecutar(self, id_comunicado: int, id_archivo: int) -> ComunicadoAdjunto:
+        if not self.comunicado_repository.obtener_por_id(id_comunicado):
+            raise RecursoNoEncontradoException(f"Comunicado {id_comunicado} no encontrado.")
+        if not self.archivo_repository.obtener_por_id(id_archivo):
+            raise RecursoNoEncontradoException(f"Archivo {id_archivo} no encontrado.")
+        if self.repository.obtener(id_comunicado, id_archivo):
+            raise AsociacionYaExisteException(
+                f"Archivo {id_archivo} ya asociado al comunicado {id_comunicado}."
+            )
+        asociacion = ComunicadoAdjunto(id_comunicado=id_comunicado, id_archivo=id_archivo)
+        return self.repository.crear(asociacion)
+
+
+class DesasociarComunicadoAdjuntoUseCase(DesasociarComunicadoAdjuntoInputPort):
+    def __init__(self, repository: ComunicadoAdjuntoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_comunicado: int, id_archivo: int) -> None:
+        if not self.repository.obtener(id_comunicado, id_archivo):
+            raise RecursoNoEncontradoException(
+                f"Asociacion comunicado {id_comunicado} - archivo {id_archivo} no encontrada."
+            )
+        self.repository.eliminar(id_comunicado, id_archivo)
+from .comunicado_adjunto_use_cases import (
+    AsociarComunicadoAdjuntoUseCase,
+    DesasociarComunicadoAdjuntoUseCase,
+)
+
+__all__ = [
+    "AsociarComunicadoAdjuntoUseCase",
+    "DesasociarComunicadoAdjuntoUseCase",
+]
+from src.domain.entities.tarea_responsable import TareaResponsable
+from src.domain.ports.input.tarea_responsable import (
+    AsociarTareaResponsableInputPort,
+    DesasociarTareaResponsableInputPort,
+)
+from src.domain.ports.output.tarea_responsable import TareaResponsableRepositoryPort
+from src.domain.ports.output.tarea import TareaRepositoryPort
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.exceptions.crud_exceptions import (
+    RecursoNoEncontradoException,
+    AsociacionYaExisteException,
+)
+
+
+class AsociarTareaResponsableUseCase(AsociarTareaResponsableInputPort):
+    def __init__(
+        self,
+        repository: TareaResponsableRepositoryPort,
+        tarea_repository: TareaRepositoryPort,
+        empleado_repository: EmpleadoRepositoryPort,
+    ):
+        self.repository = repository
+        self.tarea_repository = tarea_repository
+        self.empleado_repository = empleado_repository
+
+    def ejecutar(self, id_tarea: int, id_responsable: int, id_rol: int) -> TareaResponsable:
+        if not self.tarea_repository.obtener_por_id(id_tarea):
+            raise RecursoNoEncontradoException(f"Tarea {id_tarea} no encontrada.")
+        if not self.empleado_repository.obtener_por_id(id_responsable):
+            raise RecursoNoEncontradoException(f"Empleado {id_responsable} no encontrado.")
+        if self.repository.obtener(id_tarea, id_responsable):
+            raise AsociacionYaExisteException(
+                f"Responsable {id_responsable} ya asociado a la tarea {id_tarea}."
+            )
+        asociacion = TareaResponsable(
+            id_tarea=id_tarea,
+            id_responsable=id_responsable,
+            id_rol=id_rol,
+        )
+        return self.repository.crear(asociacion)
+
+
+class DesasociarTareaResponsableUseCase(DesasociarTareaResponsableInputPort):
+    def __init__(self, repository: TareaResponsableRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_tarea: int, id_responsable: int) -> None:
+        if not self.repository.obtener(id_tarea, id_responsable):
+            raise RecursoNoEncontradoException(
+                f"Asociacion tarea {id_tarea} - responsable {id_responsable} no encontrada."
+            )
+        self.repository.eliminar(id_tarea, id_responsable)
+from .tarea_responsable_use_cases import (
+    AsociarTareaResponsableUseCase,
+    DesasociarTareaResponsableUseCase,
+)
+
+__all__ = [
+    "AsociarTareaResponsableUseCase",
+    "DesasociarTareaResponsableUseCase",
+]
+from typing import List, Optional
+from datetime import date
+from src.domain.entities.comunicado import Comunicado
+from src.domain.ports.input.comunicado import (
+    CreateComunicadoInputPort,
+    GetComunicadoInputPort,
+    ListComunicadoInputPort,
+    UpdateComunicadoInputPort,
+    DeleteComunicadoInputPort,
+)
+from src.domain.ports.output.comunicado import ComunicadoRepositoryPort
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+
+
+class CreateComunicadoUseCase(CreateComunicadoInputPort):
+    def __init__(self, repository: ComunicadoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        doi: str,
+        num_comunicado: str,
+        id_emisor: int,
+        fecha_recepcion: date,
+        id_destinatario: int,
+        fecha_registro: date,
+        id_registro: int,
+        id_metodo_recepcion: int,
+        tema: str,
+        id_tipo_comunicado: int,
+        observaciones: Optional[str],
+    ) -> Comunicado:
+        entity = Comunicado(
+            id_comunicado=0,
+            doi=doi,
+            num_comunicado=num_comunicado,
+            id_emisor=id_emisor,
+            fecha_recepcion=fecha_recepcion,
+            id_destinatario=id_destinatario,
+            fecha_registro=fecha_registro,
+            id_registro=id_registro,
+            id_metodo_recepcion=id_metodo_recepcion,
+            tema=tema,
+            id_tipo_comunicado=id_tipo_comunicado,
+            observaciones=observaciones,
+        )
+        return self.repository.crear(entity)
+
+
+class GetComunicadoUseCase(GetComunicadoInputPort):
+    def __init__(self, repository: ComunicadoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_comunicado: int) -> Comunicado:
+        resultado = self.repository.obtener_por_id(id_comunicado)
+        if not resultado:
+            raise RecursoNoEncontradoException(f"Comunicado {id_comunicado} no encontrado.")
+        return resultado
+
+
+class ListComunicadoUseCase(ListComunicadoInputPort):
+    def __init__(self, repository: ComunicadoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[Comunicado]:
+        return self.repository.listar(skip, limit)
+
+
+class UpdateComunicadoUseCase(UpdateComunicadoInputPort):
+    def __init__(self, repository: ComunicadoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(
+        self,
+        id_comunicado: int,
+        doi: str,
+        num_comunicado: str,
+        id_emisor: int,
+        fecha_recepcion: date,
+        id_destinatario: int,
+        fecha_registro: date,
+        id_registro: int,
+        id_metodo_recepcion: int,
+        tema: str,
+        id_tipo_comunicado: int,
+        observaciones: Optional[str],
+    ) -> Comunicado:
+        existente = self.repository.obtener_por_id(id_comunicado)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Comunicado {id_comunicado} no encontrado.")
+        existente.doi = doi
+        existente.num_comunicado = num_comunicado
+        existente.id_emisor = id_emisor
+        existente.fecha_recepcion = fecha_recepcion
+        existente.id_destinatario = id_destinatario
+        existente.fecha_registro = fecha_registro
+        existente.id_registro = id_registro
+        existente.id_metodo_recepcion = id_metodo_recepcion
+        existente.tema = tema
+        existente.id_tipo_comunicado = id_tipo_comunicado
+        existente.observaciones = observaciones
+        return self.repository.actualizar(existente)
+
+
+class DeleteComunicadoUseCase(DeleteComunicadoInputPort):
+    def __init__(self, repository: ComunicadoRepositoryPort):
+        self.repository = repository
+
+    def ejecutar(self, id_comunicado: int) -> None:
+        existente = self.repository.obtener_por_id(id_comunicado)
+        if not existente:
+            raise RecursoNoEncontradoException(f"Comunicado {id_comunicado} no encontrado.")
+        self.repository.eliminar(id_comunicado)
+from .comunicado_use_cases import (
+    CreateComunicadoUseCase,
+    GetComunicadoUseCase,
+    ListComunicadoUseCase,
+    UpdateComunicadoUseCase,
+    DeleteComunicadoUseCase,
+)
+
+__all__ = [
+    "CreateComunicadoUseCase",
+    "GetComunicadoUseCase",
+    "ListComunicadoUseCase",
+    "UpdateComunicadoUseCase",
+    "DeleteComunicadoUseCase",
+]
+"""DTOs para solicitud de login."""
+
+from pydantic import BaseModel, EmailStr
+
+
+class LoginRequest(BaseModel):
+    """Request body para endpoint POST /login."""
+    email: EmailStr
+    password: str
+
+    class Config:
+        example = {
+            "email": "usuario@ejemplo.com",
+            "password": "contraseña"
+        }
+
+
+class LoginResponse(BaseModel):
+    """Response body para endpoint POST /login."""
+    token: str
+    token_type: str = "bearer"
+    id_empleado: int
+    email: str
+    nombre: str
+
+    class Config:
+        example = {
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "token_type": "bearer",
+            "id_empleado": 1,
+            "email": "usuario@ejemplo.com",
+            "nombre": "Juan Pérez"
+        }
+"""DTOs para creación de Empleado."""
+
+from pydantic import BaseModel, EmailStr
+
+
+class CreateEmpleadoRequest(BaseModel):
+    """Request body para crear Empleado (solo admin en esta fase)."""
+    nombre: str
+    email: EmailStr
+    password: str  # Se recibirá en texto plano y se hasheará antes de guardar
+    id_area: int
+    id_cargo: int
+
+    class Config:
+        example = {
+            "nombre": "Juan Pérez",
+            "email": "juan.perez@ejemplo.com",
+            "password": "password_segura",
+            "id_area": 1,
+            "id_cargo": 2
+        }
+
+
+class CreateEmpleadoResponse(BaseModel):
+    """Response body para creación de Empleado."""
+    id_empleado: int
+    nombre: str
+    email: str
+    id_area: int
+    id_cargo: int
+
+    class Config:
+        example = {
+            "id_empleado": 1,
+            "nombre": "Juan Pérez",
+            "email": "juan.perez@ejemplo.com",
+            "id_area": 1,
+            "id_cargo": 2
+        }
+"""DTOs del módulo Empleado."""
+
+from .login import LoginRequest, LoginResponse
+from .create import CreateEmpleadoRequest, CreateEmpleadoResponse
+
+__all__ = [
+    "LoginRequest",
+    "LoginResponse",
+    "CreateEmpleadoRequest",
+    "CreateEmpleadoResponse",
+]
+from datetime import date
+from pydantic import BaseModel
+
+
+class CreateArchivoRequest(BaseModel):
+    doi: str
+    descripcion: str
+    url_archivo: str
+    nombre_original: str
+    id_elaborador: int
+    fecha_registro: date
+
+
+class UpdateArchivoRequest(BaseModel):
+    doi: str
+    descripcion: str
+    url_archivo: str
+    nombre_original: str
+    id_elaborador: int
+    fecha_registro: date
+
+
+class ArchivoResponse(BaseModel):
+    id_archivo: int
+    doi: str
+    descripcion: str
+    url_archivo: str
+    nombre_original: str
+    id_elaborador: int
+    fecha_registro: date
+
+
+class ListArchivoResponse(BaseModel):
+    items: list[ArchivoResponse]
+    total: int
+    skip: int
+    limit: int
+from .archivo_dtos import (
+    CreateArchivoRequest,
+    UpdateArchivoRequest,
+    ArchivoResponse,
+    ListArchivoResponse,
+)
+
+__all__ = [
+    "CreateArchivoRequest",
+    "UpdateArchivoRequest",
+    "ArchivoResponse",
+    "ListArchivoResponse",
+]
+from pydantic import BaseModel
+
+
+class AsociarComunicadoDestinatarioRequest(BaseModel):
+    id_destinatario: int
+    id_rol_destinatario: int
+
+
+class ComunicadoDestinatarioResponse(BaseModel):
+    id_comunicado: int
+    id_destinatario: int
+    id_rol_destinatario: int
+from .comunicado_destinatario_dtos import (
+    AsociarComunicadoDestinatarioRequest,
+    ComunicadoDestinatarioResponse,
+)
+
+__all__ = [
+    "AsociarComunicadoDestinatarioRequest",
+    "ComunicadoDestinatarioResponse",
+]
+from datetime import date
+from pydantic import BaseModel
+
+
+class AsociarEmpCargoRequest(BaseModel):
+    id_empleado: int
+    id_cargo: int
+    fecha_inicio: date
+    fecha_termina: date
+    id_registro_modificacion: int
+
+
+class EmpCargoResponse(BaseModel):
+    id_empleado: int
+    id_cargo: int
+    fecha_inicio: date
+    fecha_termina: date
+    id_registro_modificacion: int
+from .emp_cargo_dtos import AsociarEmpCargoRequest, EmpCargoResponse
+
+__all__ = ["AsociarEmpCargoRequest", "EmpCargoResponse"]
+from pydantic import BaseModel
+
+
+class CreateCatalogoRequest(BaseModel):
+    id_tipo_catalogo: int
+    descripcion: str
+
+
+class UpdateCatalogoRequest(BaseModel):
+    id_tipo_catalogo: int
+    descripcion: str
+
+
+class CatalogoResponse(BaseModel):
+    id_catalogo: int
+    id_tipo_catalogo: int
+    descripcion: str
+
+
+class ListCatalogoResponse(BaseModel):
+    items: list[CatalogoResponse]
+    total: int
+    skip: int
+    limit: int
+from .catalogo_dtos import (
+    CreateCatalogoRequest,
+    UpdateCatalogoRequest,
+    CatalogoResponse,
+    ListCatalogoResponse,
+)
+
+__all__ = [
+    "CreateCatalogoRequest",
+    "UpdateCatalogoRequest",
+    "CatalogoResponse",
+    "ListCatalogoResponse",
+]
+from pydantic import BaseModel
+
+
+class CreateRolResponsableRequest(BaseModel):
+    descripcion_rol: str
+
+
+class UpdateRolResponsableRequest(BaseModel):
+    descripcion_rol: str
+
+
+class RolResponsableResponse(BaseModel):
+    id_rol: int
+    descripcion_rol: str
+
+
+class ListRolResponsableResponse(BaseModel):
+    items: list[RolResponsableResponse]
+    total: int
+    skip: int
+    limit: int
+from .rol_responsable_dtos import (
+    CreateRolResponsableRequest,
+    UpdateRolResponsableRequest,
+    RolResponsableResponse,
+    ListRolResponsableResponse,
+)
+
+__all__ = [
+    "CreateRolResponsableRequest",
+    "UpdateRolResponsableRequest",
+    "RolResponsableResponse",
+    "ListRolResponsableResponse",
+]
+from pydantic import BaseModel
+
+
+class CreateRolDestinatarioRequest(BaseModel):
+    descripcion: str
+
+
+class UpdateRolDestinatarioRequest(BaseModel):
+    descripcion: str
+
+
+class RolDestinatarioResponse(BaseModel):
+    id_rol: int
+    descripcion: str
+
+
+class ListRolDestinatarioResponse(BaseModel):
+    items: list[RolDestinatarioResponse]
+    total: int
+    skip: int
+    limit: int
+from .rol_destinatario_dtos import (
+    CreateRolDestinatarioRequest,
+    UpdateRolDestinatarioRequest,
+    RolDestinatarioResponse,
+    ListRolDestinatarioResponse,
+)
+
+__all__ = [
+    "CreateRolDestinatarioRequest",
+    "UpdateRolDestinatarioRequest",
+    "RolDestinatarioResponse",
+    "ListRolDestinatarioResponse",
+]
+from pydantic import BaseModel
+
+
+class AsociarTareaArchivoRequest(BaseModel):
+    id_archivo: int
+
+
+class TareaArchivoResponse(BaseModel):
+    id_tarea: int
+    id_archivo: int
+from .tarea_archivo_dtos import (
+    AsociarTareaArchivoRequest,
+    TareaArchivoResponse,
+)
+
+__all__ = [
+    "AsociarTareaArchivoRequest",
+    "TareaArchivoResponse",
+]
+from datetime import date
+from typing import Optional
+from pydantic import BaseModel
+
+
+class CreateTareaRequest(BaseModel):
+    id_comunicado: int
+    descripcion: str
+    fecha_entrega: date
+    fecha_registro: date
+    id_estado_tarea: Optional[int] = None
+
+
+class UpdateTareaRequest(BaseModel):
+    id_comunicado: int
+    descripcion: str
+    fecha_entrega: date
+    fecha_registro: date
+    id_estado_tarea: Optional[int] = None
+
+
+class TareaResponse(BaseModel):
+    id_tarea: int
+    id_comunicado: int
+    descripcion: str
+    fecha_entrega: date
+    fecha_registro: date
+    id_estado_tarea: Optional[int] = None
+
+
+class ListTareaResponse(BaseModel):
+    items: list[TareaResponse]
+    total: int
+    skip: int
+    limit: int
+from .tarea_dtos import (
+    CreateTareaRequest,
+    UpdateTareaRequest,
+    TareaResponse,
+    ListTareaResponse,
+)
+
+__all__ = [
+    "CreateTareaRequest",
+    "UpdateTareaRequest",
+    "TareaResponse",
+    "ListTareaResponse",
+]
+from pydantic import BaseModel
+
+
+class CreateTipoCatalogoRequest(BaseModel):
+    nombre_tipo_catalogo: str
+
+
+class UpdateTipoCatalogoRequest(BaseModel):
+    nombre_tipo_catalogo: str
+
+
+class TipoCatalogoResponse(BaseModel):
+    id_tipo_catalogo: int
+    nombre_tipo_catalogo: str
+
+
+class ListTipoCatalogoResponse(BaseModel):
+    items: list[TipoCatalogoResponse]
+    total: int
+    skip: int
+    limit: int
+from .tipo_catalogo_dtos import (
+    CreateTipoCatalogoRequest,
+    UpdateTipoCatalogoRequest,
+    TipoCatalogoResponse,
+    ListTipoCatalogoResponse,
+)
+
+__all__ = [
+    "CreateTipoCatalogoRequest",
+    "UpdateTipoCatalogoRequest",
+    "TipoCatalogoResponse",
+    "ListTipoCatalogoResponse",
+]
+from pydantic import BaseModel
+
+
+class CreateEstadoTareaRequest(BaseModel):
+    nombre_estado: str
+
+
+class UpdateEstadoTareaRequest(BaseModel):
+    nombre_estado: str
+
+
+class EstadoTareaResponse(BaseModel):
+    id_estado_tarea: int
+    nombre_estado: str
+
+
+class ListEstadoTareaResponse(BaseModel):
+    items: list[EstadoTareaResponse]
+    total: int
+    skip: int
+    limit: int
+from .estado_tarea_dtos import (
+    CreateEstadoTareaRequest,
+    UpdateEstadoTareaRequest,
+    EstadoTareaResponse,
+    ListEstadoTareaResponse,
+)
+
+__all__ = [
+    "CreateEstadoTareaRequest",
+    "UpdateEstadoTareaRequest",
+    "EstadoTareaResponse",
+    "ListEstadoTareaResponse",
+]
+from pydantic import BaseModel
+
+
+class AsociarComunicadoAdjuntoRequest(BaseModel):
+    id_archivo: int
+
+
+class ComunicadoAdjuntoResponse(BaseModel):
+    id_comunicado: int
+    id_archivo: int
+from .comunicado_adjunto_dtos import (
+    AsociarComunicadoAdjuntoRequest,
+    ComunicadoAdjuntoResponse,
+)
+
+__all__ = [
+    "AsociarComunicadoAdjuntoRequest",
+    "ComunicadoAdjuntoResponse",
+]
+from pydantic import BaseModel
+
+
+class AsociarTareaResponsableRequest(BaseModel):
+    id_responsable: int
+    id_rol: int
+
+
+class TareaResponsableResponse(BaseModel):
+    id_tarea: int
+    id_responsable: int
+    id_rol: int
+from .tarea_responsable_dtos import (
+    AsociarTareaResponsableRequest,
+    TareaResponsableResponse,
+)
+
+__all__ = [
+    "AsociarTareaResponsableRequest",
+    "TareaResponsableResponse",
+]
+from .comunicado_dtos import (
+    CreateComunicadoRequest,
+    UpdateComunicadoRequest,
+    ComunicadoResponse,
+    ListComunicadoResponse,
+)
+
+__all__ = [
+    "CreateComunicadoRequest",
+    "UpdateComunicadoRequest",
+    "ComunicadoResponse",
+    "ListComunicadoResponse",
+]
+from datetime import date
+from typing import Optional
+from pydantic import BaseModel
+
+
+class CreateComunicadoRequest(BaseModel):
+    doi: str
+    num_comunicado: str
+    id_emisor: int
+    fecha_recepcion: date
+    id_destinatario: int
+    fecha_registro: date
+    id_registro: int
+    id_metodo_recepcion: int
+    tema: str
+    id_tipo_comunicado: int
+    observaciones: Optional[str] = None
+
+
+class UpdateComunicadoRequest(BaseModel):
+    doi: str
+    num_comunicado: str
+    id_emisor: int
+    fecha_recepcion: date
+    id_destinatario: int
+    fecha_registro: date
+    id_registro: int
+    id_metodo_recepcion: int
+    tema: str
+    id_tipo_comunicado: int
+    observaciones: Optional[str] = None
+
+
+class ComunicadoResponse(BaseModel):
+    id_comunicado: int
+    doi: str
+    num_comunicado: str
+    id_emisor: int
+    fecha_recepcion: date
+    id_destinatario: int
+    fecha_registro: date
+    id_registro: int
+    id_metodo_recepcion: int
+    tema: str
+    id_tipo_comunicado: int
+    observaciones: Optional[str] = None
+
+
+class ListComunicadoResponse(BaseModel):
+    items: list[ComunicadoResponse]
+    total: int
+    skip: int
+    limit: int
