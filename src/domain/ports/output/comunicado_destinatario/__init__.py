@@ -1,0 +1,3 @@
+from .comunicado_destinatario_repository_port import ComunicadoDestinatarioRepositoryPort
+
+__all__ = ["ComunicadoDestinatarioRepositoryPort"]
