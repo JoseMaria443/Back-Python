@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class Estado:
-    """Entidad de dominio Estado (genérico).
+    """Entidad de dominio Estado.
     
-    Catálogo genérico para estados de otras entidades (Comunicado, Archivo, etc.).
-    NO se usa para Tarea (ver EstadoTarea).
-    Estructura definitiva pendiente.
+    Representa un estado base del sistema.
+    Ejemplos: Activo, Inactivo, Pendiente.
     """
     id_estado: int
     nombre_estado: str
+    descripcion: str = None

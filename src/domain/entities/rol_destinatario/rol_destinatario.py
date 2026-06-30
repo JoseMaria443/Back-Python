@@ -3,10 +3,11 @@ from dataclasses import dataclass
 
 @dataclass
 class RolDestinatario:
-    """Entidad de dominio Rol_Destinatario.
+    """Entidad de dominio RolDestinatario.
     
-    Catálogo separado para roles de destinatarios en Comunicado_Destinatario.
-    Ejemplo: Principal, Con copia, Informativo.
+    Representa un rol que puede tener un destinatario de comunicado.
+    Ejemplos: Jefe, Subalterno, RRHH.
     """
-    id_rol: int
-    descripcion: str
+    id_rol_destinatario: int
+    nombre_rol: str
+    descripcion: str = None

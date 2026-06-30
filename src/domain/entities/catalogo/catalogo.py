@@ -5,9 +5,10 @@ from dataclasses import dataclass
 class Catalogo:
     """Entidad de dominio Catalogo.
     
-    Catálogo genérico que agrupa tipos de datos comunes como
-    TipoComunicado, MetodoRecepcion, etc.
+    Representa un catálogo de valores que pertenece a un tipo de catálogo.
+    Ejemplos: Áreas, Cargos, Tipos de Documento.
     """
     id_catalogo: int
+    nombre_catalogo: str
     id_tipo_catalogo: int
-    descripcion: str
+    descripcion: str = None
