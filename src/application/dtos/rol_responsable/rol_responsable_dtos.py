@@ -1,12 +1,21 @@
 from pydantic import BaseModel, Field
 
 
-class RolResponsableRequestDTO(BaseModel):
-    nombre_rol: str = Field(..., min_length=2, max_length=50)
-    descripcion: str = Field(None, max_length=255)
+class CreateRolResponsableRequest(BaseModel):
+    descripcion_rol: str = Field(..., min_length=2, max_length=255)
 
 
-class RolResponsableResponseDTO(BaseModel):
-    id_rol_responsable: int
-    nombre_rol: str
-    descripcion: str = None
+class UpdateRolResponsableRequest(BaseModel):
+    descripcion_rol: str = Field(..., min_length=2, max_length=255)
+
+
+class RolResponsableResponse(BaseModel):
+    id_rol: int
+    descripcion_rol: str
+
+
+class ListRolResponsableResponse(BaseModel):
+    items: list[RolResponsableResponse]
+    total: int
+    skip: int
+    limit: int
