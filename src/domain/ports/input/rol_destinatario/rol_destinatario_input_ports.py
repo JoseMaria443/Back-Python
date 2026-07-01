@@ -5,13 +5,13 @@ from src.domain.entities.rol_destinatario import RolDestinatario
 
 class CreateRolDestinatarioInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, nombre_rol: str, descripcion: str = None) -> RolDestinatario:
+    def ejecutar(self, descripcion: str) -> RolDestinatario:
         pass
 
 
 class GetRolDestinatarioInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_destinatario: int) -> RolDestinatario:
+    def ejecutar(self, id_rol: int) -> RolDestinatario:
         pass
 
 
@@ -23,11 +23,11 @@ class ListRolDestinatarioInputPort(ABC):
 
 class UpdateRolDestinatarioInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_destinatario: int, nombre_rol: str, descripcion: str = None) -> RolDestinatario:
+    def ejecutar(self, id_rol: int, descripcion: str) -> RolDestinatario:
         pass
 
 
 class DeleteRolDestinatarioInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_destinatario: int) -> None:
+    def ejecutar(self, id_rol: int) -> None:
         pass

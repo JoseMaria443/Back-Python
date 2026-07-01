@@ -5,7 +5,7 @@ from src.domain.entities.catalogo import Catalogo
 
 class CreateCatalogoInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, nombre_catalogo: str, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
+    def ejecutar(self, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
         pass
 
 
@@ -23,7 +23,7 @@ class ListCatalogoInputPort(ABC):
 
 class UpdateCatalogoInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_catalogo: int, nombre_catalogo: str, descripcion: str = None) -> Catalogo:
+    def ejecutar(self, id_catalogo: int, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
         pass
 
 

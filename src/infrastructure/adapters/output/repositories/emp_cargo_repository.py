@@ -20,9 +20,15 @@ class EmpCargoRepository(EmpCargoRepositoryPort):
         )
         self.session.add(orm)
         self.session.commit()
-        return emp_cargo
+        return EmpCargo(
+            id_empleado=orm.id_empleado,
+            id_cargo=orm.id_cargo,
+            fecha_inicio=orm.fecha_inicio,
+            fecha_termina=orm.fecha_termina,
+            id_registro_modificacion=orm.id_registro_modificacion,
+        )
 
-    def obtener(self, id_empleado: int, id_cargo: int) -> Optional[EmpCargo]:
+    def obtener_por_id(self, id_empleado: int, id_cargo: int) -> Optional[EmpCargo]:
         orm = self.session.query(EmpCargoORM).filter(
             EmpCargoORM.id_empleado == id_empleado,
             EmpCargoORM.id_cargo == id_cargo,

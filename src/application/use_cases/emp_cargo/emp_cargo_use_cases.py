@@ -1,68 +1,54 @@
-from typing import List
+from datetime import date
+
 from src.domain.entities.emp_cargo import EmpCargo
 from src.domain.ports.input.emp_cargo import (
-    CreateEmpCargoInputPort,
-    GetEmpCargoInputPort,
-    ListEmpCargoInputPort,
-    UpdateEmpCargoInputPort,
-    DeleteEmpCargoInputPort,
+    AsociarEmpCargoInputPort,
+    DesasociarEmpCargoInputPort,
 )
 from src.domain.ports.output.emp_cargo import EmpCargoRepositoryPort
 from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException
+from src.domain.exceptions.crud_exceptions import AsociacionYaExisteException
+from src.domain.ports.output.empleado import EmpleadoRepositoryPort
 
 
-class CreateEmpCargoUseCase(CreateEmpCargoInputPort):
-    def __init__(self, repository: EmpCargoRepositoryPort):
+class AsociarEmpCargoUseCase(AsociarEmpCargoInputPort):
+    def __init__(
+        self,
+        repository: EmpCargoRepositoryPort,
+        empleado_repository: EmpleadoRepositoryPort,
+    ):
         self.repository = repository
+        self.empleado_repository = empleado_repository
 
-    def ejecutar(self, id_empleado: int, id_cargo: int, fecha_inicio: str, fecha_termina: str, id_registro_modificacion: int) -> EmpCargo:
-        from datetime import datetime
+    def ejecutar(
+        self,
+        id_empleado: int,
+        id_cargo: int,
+        fecha_inicio: date,
+        fecha_termina: date,
+        id_registro_modificacion: int,
+    ) -> EmpCargo:
+        empleado = self.empleado_repository.obtener_por_id(id_empleado)
+        if not empleado:
+            raise RecursoNoEncontradoException(f"Empleado {id_empleado} no encontrado.")
+
+        existente = self.repository.obtener_por_id(id_empleado, id_cargo)
+        if existente:
+            raise AsociacionYaExisteException(
+                f"La asociación empleado-cargo {id_empleado}-{id_cargo} ya existe."
+            )
+
         emp_cargo = EmpCargo(
             id_empleado=id_empleado,
             id_cargo=id_cargo,
-            fecha_inicio=datetime.strptime(fecha_inicio, "%Y-%m-%d").date(),
-            fecha_termina=datetime.strptime(fecha_termina, "%Y-%m-%d").date(),
+            fecha_inicio=fecha_inicio,
+            fecha_termina=fecha_termina,
             id_registro_modificacion=id_registro_modificacion,
         )
         return self.repository.crear(emp_cargo)
 
 
-class GetEmpCargoUseCase(GetEmpCargoInputPort):
-    def __init__(self, repository: EmpCargoRepositoryPort):
-        self.repository = repository
-
-    def ejecutar(self, id_empleado: int, id_cargo: int) -> EmpCargo:
-        resultado = self.repository.obtener_por_id(id_empleado, id_cargo)
-        if not resultado:
-            raise RecursoNoEncontradoException(f"EmpCargo {id_empleado}-{id_cargo} no encontrado.")
-        return resultado
-
-
-class ListEmpCargoUseCase(ListEmpCargoInputPort):
-    def __init__(self, repository: EmpCargoRepositoryPort):
-        self.repository = repository
-
-    def ejecutar(self, skip: int = 0, limit: int = 50) -> List[EmpCargo]:
-        return self.repository.listar(skip, limit)
-
-
-class UpdateEmpCargoUseCase(UpdateEmpCargoInputPort):
-    def __init__(self, repository: EmpCargoRepositoryPort):
-        self.repository = repository
-
-    def ejecutar(self, id_empleado: int, id_cargo: int, fecha_inicio: str, fecha_termina: str, id_registro_modificacion: int) -> EmpCargo:
-        from datetime import datetime
-        existente = self.repository.obtener_por_id(id_empleado, id_cargo)
-        if not existente:
-            raise RecursoNoEncontradoException(f"EmpCargo {id_empleado}-{id_cargo} no encontrado.")
-        existente.fecha_inicio = datetime.strptime(fecha_inicio, "%Y-%m-%d").date()
-        existente.fecha_termina = datetime.strptime(fecha_termina, "%Y-%m-%d").date()
-        existente.id_registro_modificacion = id_registro_modificacion
-        actualizado = self.repository.actualizar(existente)
-        return actualizado
-
-
-class DeleteEmpCargoUseCase(DeleteEmpCargoInputPort):
+class DesasociarEmpCargoUseCase(DesasociarEmpCargoInputPort):
     def __init__(self, repository: EmpCargoRepositoryPort):
         self.repository = repository
 

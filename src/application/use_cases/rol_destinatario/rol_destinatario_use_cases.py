@@ -15,10 +15,9 @@ class CreateRolDestinatarioUseCase(CreateRolDestinatarioInputPort):
     def __init__(self, repository: RolDestinatarioRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, nombre_rol: str, descripcion: str = None) -> RolDestinatario:
+    def ejecutar(self, descripcion: str) -> RolDestinatario:
         rol = RolDestinatario(
-            id_rol_destinatario=0,
-            nombre_rol=nombre_rol,
+            id_rol=0,
             descripcion=descripcion,
         )
         return self.repository.crear(rol)
@@ -28,10 +27,10 @@ class GetRolDestinatarioUseCase(GetRolDestinatarioInputPort):
     def __init__(self, repository: RolDestinatarioRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, id_rol_destinatario: int) -> RolDestinatario:
-        resultado = self.repository.obtener_por_id(id_rol_destinatario)
+    def ejecutar(self, id_rol: int) -> RolDestinatario:
+        resultado = self.repository.obtener_por_id(id_rol)
         if not resultado:
-            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol_destinatario} no encontrado.")
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
         return resultado
 
 
@@ -47,11 +46,10 @@ class UpdateRolDestinatarioUseCase(UpdateRolDestinatarioInputPort):
     def __init__(self, repository: RolDestinatarioRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, id_rol_destinatario: int, nombre_rol: str, descripcion: str = None) -> RolDestinatario:
-        existente = self.repository.obtener_por_id(id_rol_destinatario)
+    def ejecutar(self, id_rol: int, descripcion: str) -> RolDestinatario:
+        existente = self.repository.obtener_por_id(id_rol)
         if not existente:
-            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol_destinatario} no encontrado.")
-        existente.nombre_rol = nombre_rol
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
         existente.descripcion = descripcion
         actualizado = self.repository.actualizar(existente)
         return actualizado
@@ -61,8 +59,8 @@ class DeleteRolDestinatarioUseCase(DeleteRolDestinatarioInputPort):
     def __init__(self, repository: RolDestinatarioRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, id_rol_destinatario: int) -> None:
-        existente = self.repository.obtener_por_id(id_rol_destinatario)
+    def ejecutar(self, id_rol: int) -> None:
+        existente = self.repository.obtener_por_id(id_rol)
         if not existente:
-            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol_destinatario} no encontrado.")
-        self.repository.eliminar(id_rol_destinatario)
+            raise RecursoNoEncontradoException(f"RolDestinatario {id_rol} no encontrado.")
+        self.repository.eliminar(id_rol)

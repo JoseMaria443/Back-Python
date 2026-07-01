@@ -15,10 +15,9 @@ class CreateCatalogoUseCase(CreateCatalogoInputPort):
     def __init__(self, repository: CatalogoRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, nombre_catalogo: str, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
+    def ejecutar(self, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
         catalogo = Catalogo(
             id_catalogo=0,
-            nombre_catalogo=nombre_catalogo,
             id_tipo_catalogo=id_tipo_catalogo,
             descripcion=descripcion,
         )
@@ -48,11 +47,11 @@ class UpdateCatalogoUseCase(UpdateCatalogoInputPort):
     def __init__(self, repository: CatalogoRepositoryPort):
         self.repository = repository
 
-    def ejecutar(self, id_catalogo: int, nombre_catalogo: str, descripcion: str = None) -> Catalogo:
+    def ejecutar(self, id_catalogo: int, id_tipo_catalogo: int, descripcion: str = None) -> Catalogo:
         existente = self.repository.obtener_por_id(id_catalogo)
         if not existente:
             raise RecursoNoEncontradoException(f"Catalogo {id_catalogo} no encontrado.")
-        existente.nombre_catalogo = nombre_catalogo
+        existente.id_tipo_catalogo = id_tipo_catalogo
         existente.descripcion = descripcion
         actualizado = self.repository.actualizar(existente)
         return actualizado

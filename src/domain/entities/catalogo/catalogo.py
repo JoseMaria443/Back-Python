@@ -9,6 +9,5 @@ class Catalogo:
     Ejemplos: Áreas, Cargos, Tipos de Documento.
     """
     id_catalogo: int
-    nombre_catalogo: str
     id_tipo_catalogo: int
     descripcion: str = None

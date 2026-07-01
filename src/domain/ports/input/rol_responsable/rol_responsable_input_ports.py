@@ -5,13 +5,13 @@ from src.domain.entities.rol_responsable import RolResponsable
 
 class CreateRolResponsableInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, nombre_rol: str, descripcion: str = None) -> RolResponsable:
+    def ejecutar(self, descripcion_rol: str) -> RolResponsable:
         pass
 
 
 class GetRolResponsableInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_responsable: int) -> RolResponsable:
+    def ejecutar(self, id_rol: int) -> RolResponsable:
         pass
 
 
@@ -23,11 +23,11 @@ class ListRolResponsableInputPort(ABC):
 
 class UpdateRolResponsableInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_responsable: int, nombre_rol: str, descripcion: str = None) -> RolResponsable:
+    def ejecutar(self, id_rol: int, descripcion_rol: str) -> RolResponsable:
         pass
 
 
 class DeleteRolResponsableInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_rol_responsable: int) -> None:
+    def ejecutar(self, id_rol: int) -> None:
         pass

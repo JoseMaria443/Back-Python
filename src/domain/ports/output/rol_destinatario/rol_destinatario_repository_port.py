@@ -9,7 +9,7 @@ class RolDestinatarioRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def obtener_por_id(self, id_rol_destinatario: int) -> Optional[RolDestinatario]:
+    def obtener_por_id(self, id_rol: int) -> Optional[RolDestinatario]:
         pass
 
     @abstractmethod
@@ -21,5 +21,5 @@ class RolDestinatarioRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def eliminar(self, id_rol_destinatario: int) -> bool:
+    def eliminar(self, id_rol: int) -> bool:
         pass
