@@ -10,3 +10,10 @@ class EstadoResponseDTO(BaseModel):
     id_estado: int
     nombre_estado: str
     descripcion: str = None
+
+
+class ListEstadoResponse(BaseModel):
+    items: list[EstadoResponseDTO]
+    total: int
+    skip: int
+    limit: int
