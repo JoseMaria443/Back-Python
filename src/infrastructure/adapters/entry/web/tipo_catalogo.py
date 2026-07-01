@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
+from src.infrastructure.config.auth import get_current_empleado
 from src.domain.exceptions import RecursoNoEncontradoException
 from src.application.dtos.tipo_catalogo import (
     CreateTipoCatalogoRequest,
@@ -31,7 +32,11 @@ def _to_response(entity) -> TipoCatalogoResponse:
 
 
 @router.post("/", response_model=TipoCatalogoResponse, status_code=status.HTTP_201_CREATED)
-def crear(request: CreateTipoCatalogoRequest, db: Session = Depends(get_db)):
+def crear(
+    request: CreateTipoCatalogoRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = TipoCatalogoRepository(db)
     use_case = CreateTipoCatalogoUseCase(repo)
     entity = use_case.ejecutar(request.nombre_tipo_catalogo)
@@ -39,7 +44,11 @@ def crear(request: CreateTipoCatalogoRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/{id_tipo_catalogo}", response_model=TipoCatalogoResponse)
-def obtener(id_tipo_catalogo: int, db: Session = Depends(get_db)):
+def obtener(
+    id_tipo_catalogo: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = TipoCatalogoRepository(db)
         use_case = GetTipoCatalogoUseCase(repo)
@@ -50,7 +59,12 @@ def obtener(id_tipo_catalogo: int, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=ListTipoCatalogoResponse)
-def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def listar(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = TipoCatalogoRepository(db)
     use_case = ListTipoCatalogoUseCase(repo)
     items = use_case.ejecutar(skip, limit)
@@ -67,6 +81,7 @@ def actualizar(
     id_tipo_catalogo: int,
     request: UpdateTipoCatalogoRequest,
     db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
 ):
     try:
         repo = TipoCatalogoRepository(db)
@@ -78,7 +93,11 @@ def actualizar(
 
 
 @router.delete("/{id_tipo_catalogo}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar(id_tipo_catalogo: int, db: Session = Depends(get_db)):
+def eliminar(
+    id_tipo_catalogo: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = TipoCatalogoRepository(db)
         use_case = DeleteTipoCatalogoUseCase(repo)

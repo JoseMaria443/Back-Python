@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
+from src.infrastructure.config.auth import get_current_empleado
 from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
 from src.application.dtos.emp_cargo import AsociarEmpCargoRequest, EmpCargoResponse
 from src.application.use_cases.emp_cargo import AsociarEmpCargoUseCase, DesasociarEmpCargoUseCase
@@ -12,7 +13,11 @@ router = APIRouter(prefix="/api/emp-cargo", tags=["emp-cargo"])
 
 
 @router.post("/", response_model=EmpCargoResponse, status_code=status.HTTP_201_CREATED)
-def asociar(request: AsociarEmpCargoRequest, db: Session = Depends(get_db)):
+def asociar(
+    request: AsociarEmpCargoRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = EmpCargoRepository(db)
         empleado_repo = EmpleadoRepository(db)
@@ -38,7 +43,12 @@ def asociar(request: AsociarEmpCargoRequest, db: Session = Depends(get_db)):
 
 
 @router.delete("/{id_empleado}/{id_cargo}", status_code=status.HTTP_204_NO_CONTENT)
-def desasociar(id_empleado: int, id_cargo: int, db: Session = Depends(get_db)):
+def desasociar(
+    id_empleado: int,
+    id_cargo: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = EmpCargoRepository(db)
         use_case = DesasociarEmpCargoUseCase(repo)

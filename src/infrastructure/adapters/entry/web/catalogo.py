@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
+from src.infrastructure.config.auth import get_current_empleado
 from src.domain.exceptions import RecursoNoEncontradoException
 from src.application.dtos.catalogo import (
     CreateCatalogoRequest,
@@ -30,7 +31,11 @@ def _to_response(entity) -> CatalogoResponse:
 
 
 @router.post("/", response_model=CatalogoResponse, status_code=status.HTTP_201_CREATED)
-def crear(request: CreateCatalogoRequest, db: Session = Depends(get_db)):
+def crear(
+    request: CreateCatalogoRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = CatalogoRepository(db)
     use_case = CreateCatalogoUseCase(repo)
     entity = use_case.ejecutar(request.id_tipo_catalogo, request.descripcion)
@@ -38,7 +43,11 @@ def crear(request: CreateCatalogoRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/{id_catalogo}", response_model=CatalogoResponse)
-def obtener(id_catalogo: int, db: Session = Depends(get_db)):
+def obtener(
+    id_catalogo: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = CatalogoRepository(db)
         use_case = GetCatalogoUseCase(repo)
@@ -49,7 +58,12 @@ def obtener(id_catalogo: int, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=ListCatalogoResponse)
-def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def listar(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = CatalogoRepository(db)
     use_case = ListCatalogoUseCase(repo)
     items = use_case.ejecutar(skip, limit)
@@ -66,6 +80,7 @@ def actualizar(
     id_catalogo: int,
     request: UpdateCatalogoRequest,
     db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
 ):
     try:
         repo = CatalogoRepository(db)
@@ -77,7 +92,11 @@ def actualizar(
 
 
 @router.delete("/{id_catalogo}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar(id_catalogo: int, db: Session = Depends(get_db)):
+def eliminar(
+    id_catalogo: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = CatalogoRepository(db)
         use_case = DeleteCatalogoUseCase(repo)

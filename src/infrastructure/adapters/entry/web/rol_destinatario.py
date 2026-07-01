@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
+from src.infrastructure.config.auth import get_current_empleado
 from src.domain.exceptions import RecursoNoEncontradoException
 from src.application.dtos.rol_destinatario import (
     CreateRolDestinatarioRequest,
@@ -28,7 +29,11 @@ def _to_response(entity) -> RolDestinatarioResponse:
 
 
 @router.post("/", response_model=RolDestinatarioResponse, status_code=status.HTTP_201_CREATED)
-def crear(request: CreateRolDestinatarioRequest, db: Session = Depends(get_db)):
+def crear(
+    request: CreateRolDestinatarioRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = RolDestinatarioRepository(db)
     use_case = CreateRolDestinatarioUseCase(repo)
     entity = use_case.ejecutar(request.descripcion)
@@ -36,7 +41,11 @@ def crear(request: CreateRolDestinatarioRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/{id_rol}", response_model=RolDestinatarioResponse)
-def obtener(id_rol: int, db: Session = Depends(get_db)):
+def obtener(
+    id_rol: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = RolDestinatarioRepository(db)
         use_case = GetRolDestinatarioUseCase(repo)
@@ -47,7 +56,12 @@ def obtener(id_rol: int, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=ListRolDestinatarioResponse)
-def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def listar(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     repo = RolDestinatarioRepository(db)
     use_case = ListRolDestinatarioUseCase(repo)
     items = use_case.ejecutar(skip, limit)
@@ -60,7 +74,12 @@ def listar(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
 
 
 @router.put("/{id_rol}", response_model=RolDestinatarioResponse)
-def actualizar(id_rol: int, request: UpdateRolDestinatarioRequest, db: Session = Depends(get_db)):
+def actualizar(
+    id_rol: int,
+    request: UpdateRolDestinatarioRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = RolDestinatarioRepository(db)
         use_case = UpdateRolDestinatarioUseCase(repo)
@@ -71,7 +90,11 @@ def actualizar(id_rol: int, request: UpdateRolDestinatarioRequest, db: Session =
 
 
 @router.delete("/{id_rol}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar(id_rol: int, db: Session = Depends(get_db)):
+def eliminar(
+    id_rol: int,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     try:
         repo = RolDestinatarioRepository(db)
         use_case = DeleteRolDestinatarioUseCase(repo)

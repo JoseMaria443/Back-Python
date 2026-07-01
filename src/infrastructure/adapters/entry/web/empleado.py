@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
+from src.infrastructure.config.auth import get_current_empleado
 from src.domain.exceptions import (
     CredencialesInvalidasException,
     EmailYaExisteException,
@@ -51,7 +52,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/crear", response_model=CreateEmpleadoResponse)
-def crear_empleado(request: CreateEmpleadoRequest, db: Session = Depends(get_db)):
+def crear_empleado(
+    request: CreateEmpleadoRequest,
+    db: Session = Depends(get_db),
+    _current_empleado: dict = Depends(get_current_empleado),
+):
     """Endpoint para crear empleado (admin only en esta fase).
     
     NOTA: En producción, este endpoint debe estar protegido por autenticación
