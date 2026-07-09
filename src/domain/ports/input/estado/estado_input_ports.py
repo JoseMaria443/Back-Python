@@ -5,7 +5,7 @@ from src.domain.entities.estado import Estado
 
 class CreateEstadoInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, nombre_estado: str, descripcion: str = None) -> Estado:
+    def ejecutar(self, nombre_estado: str) -> Estado:
         pass
 
 
@@ -23,7 +23,7 @@ class ListEstadoInputPort(ABC):
 
 class UpdateEstadoInputPort(ABC):
     @abstractmethod
-    def ejecutar(self, id_estado: int, nombre_estado: str, descripcion: str = None) -> Estado:
+    def ejecutar(self, id_estado: int, nombre_estado: str) -> Estado:
         pass
 
 

@@ -19,7 +19,6 @@ class EstadoRepository(EstadoRepositoryPort):
         return Estado(
             id_estado=orm.id_estado,
             nombre_estado=orm.nombre_estado,
-            descripcion=estado.descripcion,
         )
 
     def obtener_por_id(self, id_estado: int) -> Optional[Estado]:
@@ -31,7 +30,6 @@ class EstadoRepository(EstadoRepositoryPort):
         return Estado(
             id_estado=orm.id_estado,
             nombre_estado=orm.nombre_estado,
-            descripcion=None,
         )
 
     def listar(self, skip: int, limit: int) -> List[Estado]:
@@ -40,7 +38,6 @@ class EstadoRepository(EstadoRepositoryPort):
             Estado(
                 id_estado=orm.id_estado,
                 nombre_estado=orm.nombre_estado,
-                descripcion=None,
             )
             for orm in orms
         ]
@@ -60,7 +57,6 @@ class EstadoRepository(EstadoRepositoryPort):
         return Estado(
             id_estado=orm.id_estado,
             nombre_estado=orm.nombre_estado,
-            descripcion=estado.descripcion,
         )
 
     def eliminar(self, id_estado: int) -> bool:

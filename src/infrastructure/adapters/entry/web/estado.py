@@ -27,7 +27,6 @@ def _to_response(entity) -> EstadoResponseDTO:
 	return EstadoResponseDTO(
 		id_estado=entity.id_estado,
 		nombre_estado=entity.nombre_estado,
-		descripcion=entity.descripcion,
 	)
 
 
@@ -39,7 +38,7 @@ def crear(
 ):
 	repo = EstadoRepository(db)
 	use_case = CreateEstadoUseCase(repo)
-	entity = use_case.ejecutar(request.nombre_estado, request.descripcion)
+	entity = use_case.ejecutar(request.nombre_estado)
 	return _to_response(entity)
 
 
@@ -86,7 +85,7 @@ def actualizar(
 	try:
 		repo = EstadoRepository(db)
 		use_case = UpdateEstadoUseCase(repo)
-		entity = use_case.ejecutar(id_estado, request.nombre_estado, request.descripcion)
+		entity = use_case.ejecutar(id_estado, request.nombre_estado)
 		return _to_response(entity)
 	except RecursoNoEncontradoException as e:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

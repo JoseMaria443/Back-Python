@@ -10,4 +10,3 @@ class Estado:
     """
     id_estado: int
     nombre_estado: str
-    descripcion: str = None
