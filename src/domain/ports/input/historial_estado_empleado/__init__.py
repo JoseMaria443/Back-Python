@@ -1,0 +1,3 @@
+from .list_historial_estado_empleado_input_port import ListHistorialEstadoEmpleadoInputPort
+
+__all__ = ["ListHistorialEstadoEmpleadoInputPort"]
