@@ -15,6 +15,7 @@ class Empleado:
     password_hash: str
     id_area: int
     id_cargo: int
+    activo: bool = True
     
     @staticmethod
     def crear(
@@ -23,6 +24,7 @@ class Empleado:
         password_hash: str,
         id_area: int,
         id_cargo: int,
+        activo: bool = True,
     ) -> "Empleado":
         """Factory method para crear una nueva instancia de Empleado."""
         return Empleado(
@@ -32,4 +34,5 @@ class Empleado:
             password_hash=password_hash,
             id_area=id_area,
             id_cargo=id_cargo,
+            activo=activo,
         )

@@ -1,7 +1,7 @@
 """Puerto de salida (output) para repositorio de Empleado."""
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 from src.domain.entities.empleado import Empleado
 
 
@@ -57,4 +57,16 @@ class EmpleadoRepositoryPort(ABC):
         Returns:
             True si existe, False en caso contrario
         """
+        pass
+
+    @abstractmethod
+    def listar(self, skip: int = 0, limit: int = 50, nombre: str = None) -> List[Empleado]:
+        pass
+
+    @abstractmethod
+    def contar(self, nombre: str = None) -> int:
+        pass
+
+    @abstractmethod
+    def actualizar(self, empleado: Empleado) -> Empleado:
         pass

@@ -28,6 +28,7 @@ class CreateEmpleadoResponse(BaseModel):
     email: str
     id_area: int
     id_cargo: int
+    activo: bool = True
 
     class Config:
         example = {
@@ -35,5 +36,6 @@ class CreateEmpleadoResponse(BaseModel):
             "nombre": "Juan Pérez",
             "email": "juan.perez@ejemplo.com",
             "id_area": 1,
-            "id_cargo": 2
+            "id_cargo": 2,
+            "activo": True
         }

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date
+import sqlalchemy as sa
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date, Boolean
 from datetime import datetime
 from .base import Base
 
@@ -16,7 +17,7 @@ class EmpleadoORM(Base):
     password_hash = Column(String(255), nullable=False)
     id_area = Column(Integer, nullable=False)
     id_cargo = Column(Integer, nullable=False)
-    # ForeignKey pendientes: id_area -> Area, id_cargo -> Cargo
+    activo = Column(Boolean, nullable=False, server_default=sa.text('true'))
     
     def __repr__(self):
         return f"<EmpleadoORM(id={self.id_empleado}, email={self.email})>"

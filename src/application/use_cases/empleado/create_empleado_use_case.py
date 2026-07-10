@@ -28,6 +28,7 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
         password: str,
         id_area: int,
         id_cargo: int,
+        activo: bool = True,
     ) -> Empleado:
         """Crea un nuevo empleado.
         
@@ -37,6 +38,7 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
             password: Contraseña en texto plano
             id_area: ID del área
             id_cargo: ID del cargo
+            activo: Estatus activo/inactivo (default True)
             
         Returns:
             Empleado creado
@@ -58,6 +60,7 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
             password_hash=password_hash,
             id_area=id_area,
             id_cargo=id_cargo,
+            activo=activo,
         )
         
         # Guardar en repositorio
