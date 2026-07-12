@@ -13,6 +13,7 @@ from src.infrastructure.adapters.entry.web.rol_destinatario import router as rol
 from src.infrastructure.adapters.entry.web.rol_responsable import router as rol_responsable_router
 from src.infrastructure.adapters.entry.web.estado_tarea import router as estado_tarea_router
 from src.infrastructure.adapters.entry.web.emp_cargo import router as emp_cargo_router
+from src.infrastructure.adapters.entry.web.rol_empleado import router as rol_empleado_router
 
 app = FastAPI(
     title="Sistema de Gestión de Comunicados",
@@ -31,6 +32,7 @@ app.include_router(rol_destinatario_router)
 app.include_router(rol_responsable_router)
 app.include_router(estado_tarea_router)
 app.include_router(emp_cargo_router)
+app.include_router(rol_empleado_router)
 
 
 @app.get("/", tags=["root"])
