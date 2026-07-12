@@ -2,7 +2,9 @@
 
 from src.domain.ports.input.empleado import CreateEmpleadoInputPort
 from src.domain.ports.output.empleado import EmpleadoRepositoryPort
+from src.domain.ports.output.historial_estado_empleado import HistorialEstadoEmpleadoRepositoryPort
 from src.domain.entities.empleado import Empleado
+from src.domain.entities.historial_estado_empleado import HistorialEstadoEmpleado
 from src.domain.exceptions import EmailYaExisteException
 from src.infrastructure.config.security import hash_password
 
@@ -14,12 +16,18 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
     Sin dependencias directas de FastAPI ni ORM.
     """
 
-    def __init__(self, empleado_repository: EmpleadoRepositoryPort):
+    def __init__(
+        self,
+        empleado_repository: EmpleadoRepositoryPort,
+        historial_repository: HistorialEstadoEmpleadoRepositoryPort,
+    ):
         """
         Args:
             empleado_repository: Implementación del puerto de repositorio
+            historial_repository: Implementación del puerto de historial
         """
         self.empleado_repository = empleado_repository
+        self.historial_repository = historial_repository
 
     def ejecutar(
         self,
@@ -28,6 +36,7 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
         password: str,
         id_area: int,
         id_cargo: int,
+        id_empleado_ejecutor: int,
     ) -> Empleado:
         """Crea un nuevo empleado.
         
@@ -37,6 +46,7 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
             password: Contraseña en texto plano
             id_area: ID del área
             id_cargo: ID del cargo
+            id_empleado_ejecutor: ID del empleado que ejecuta la acción
             
         Returns:
             Empleado creado
@@ -62,5 +72,13 @@ class CreateEmpleadoUseCase(CreateEmpleadoInputPort):
         
         # Guardar en repositorio
         empleado_guardado = self.empleado_repository.crear(empleado)
+        
+        # Registrar en historial usando el factory
+        historial = HistorialEstadoEmpleado.crear(
+            id_empleado=empleado_guardado.id_empleado,
+            accion="alta",
+            id_empleado_ejecutor=id_empleado_ejecutor,
+        )
+        self.historial_repository.crear(historial)
         
         return empleado_guardado

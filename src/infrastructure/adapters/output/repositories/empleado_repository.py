@@ -75,4 +75,5 @@ class EmpleadoRepository(EmpleadoRepositoryPort):
             password_hash=empleado_orm.password_hash,
             id_area=empleado_orm.id_area,
             id_cargo=empleado_orm.id_cargo,
+            id_rol=empleado_orm.id_rol,
         )

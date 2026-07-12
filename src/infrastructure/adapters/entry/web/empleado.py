@@ -19,6 +19,9 @@ from src.application.use_cases.empleado import LoginUseCase, CreateEmpleadoUseCa
 from src.infrastructure.adapters.output.repositories.empleado_repository import (
     EmpleadoRepository,
 )
+from src.infrastructure.adapters.output.repositories.historial_estado_empleado_repository import (
+    HistorialEstadoEmpleadoRepository,
+)
 
 router = APIRouter(prefix="/api/empleado", tags=["empleado"])
 
@@ -55,7 +58,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 def crear_empleado(
     request: CreateEmpleadoRequest,
     db: Session = Depends(get_db),
-    _current_empleado: dict = Depends(get_current_empleado),
+    current_empleado: dict = Depends(get_current_empleado),
 ):
     """Endpoint para crear empleado (admin only en esta fase).
     
@@ -65,7 +68,8 @@ def crear_empleado(
     try:
         # Inyectar dependencias y ejecutar caso de uso
         repositorio = EmpleadoRepository(db)
-        use_case = CreateEmpleadoUseCase(repositorio)
+        historial_repo = HistorialEstadoEmpleadoRepository(db)
+        use_case = CreateEmpleadoUseCase(repositorio, historial_repo)
         
         empleado = use_case.ejecutar(
             nombre=request.nombre,
@@ -73,6 +77,7 @@ def crear_empleado(
             password=request.password,
             id_area=request.id_area,
             id_cargo=request.id_cargo,
+            id_empleado_ejecutor=current_empleado["id_empleado"],
         )
         
         return CreateEmpleadoResponse(

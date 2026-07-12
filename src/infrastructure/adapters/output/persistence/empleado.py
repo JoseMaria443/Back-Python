@@ -16,6 +16,7 @@ class EmpleadoORM(Base):
     password_hash = Column(String(255), nullable=False)
     id_area = Column(Integer, nullable=False)
     id_cargo = Column(Integer, nullable=False)
+    id_rol = Column(Integer, ForeignKey("rol_empleado.id_rol"), nullable=True)
     # ForeignKey pendientes: id_area -> Area, id_cargo -> Cargo
     
     def __repr__(self):

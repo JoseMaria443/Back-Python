@@ -7,7 +7,7 @@ from typing import Optional
 class Empleado:
     """Entidad de dominio Empleado.
     
-    Representa un empleado del sistema con datos básicos y relaciones a área y cargo.
+    Representa un empleado del sistema con datos básicos y relaciones a área, cargo y rol.
     """
     id_empleado: int
     nombre: str
@@ -15,6 +15,7 @@ class Empleado:
     password_hash: str
     id_area: int
     id_cargo: int
+    id_rol: Optional[int] = None
     
     @staticmethod
     def crear(
@@ -23,6 +24,7 @@ class Empleado:
         password_hash: str,
         id_area: int,
         id_cargo: int,
+        id_rol: Optional[int] = None,
     ) -> "Empleado":
         """Factory method para crear una nueva instancia de Empleado."""
         return Empleado(
@@ -32,4 +34,5 @@ class Empleado:
             password_hash=password_hash,
             id_area=id_area,
             id_cargo=id_cargo,
+            id_rol=id_rol,
         )

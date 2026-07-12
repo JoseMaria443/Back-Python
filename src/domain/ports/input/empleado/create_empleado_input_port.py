@@ -15,6 +15,7 @@ class CreateEmpleadoInputPort(ABC):
         password: str,
         id_area: int,
         id_cargo: int,
+        id_empleado_ejecutor: int,
     ) -> Empleado:
         """Crea un nuevo empleado.
         
@@ -24,6 +25,7 @@ class CreateEmpleadoInputPort(ABC):
             password: Contraseña en texto plano (se hasheará)
             id_area: ID del área
             id_cargo: ID del cargo
+            id_empleado_ejecutor: ID del empleado que ejecuta la acción
             
         Returns:
             Empleado creado
