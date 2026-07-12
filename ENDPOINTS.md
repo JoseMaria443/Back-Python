@@ -1,6 +1,7 @@
 # Documentación de Endpoints
 
 ## Índice
+- [Root](#root)
 - [Mis módulos](#mis-módulos)
   - [Empleado](#empleado)
   - [Estado](#estado)
@@ -15,6 +16,15 @@
   - [Rol Destinatario](#rol-destinatario)
   - [Rol Responsable](#rol-responsable)
   - [Estado Tarea](#estado-tarea)
+
+---
+
+## Root
+
+| Método | Ruta | Auth | Request DTO | Response DTO | Status |
+|--------|------|------|-------------|--------------|--------|
+| GET | / | No | - | {message: str, version: str, status: str} | 200 |
+| GET | /health | No | - | {status: str} | 200 |
 
 ---
 
