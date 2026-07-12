@@ -10,7 +10,7 @@ from src.application.use_cases.rol_empleado.rol_empleado_use_cases import (
     ListRolEmpleadoUseCase,
 )
 from src.domain.entities.rol_empleado import RolEmpleado
-from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException, RecursoEnUsoException
 
 
 class TestCreateRolEmpleadoUseCase:
@@ -73,7 +73,7 @@ class TestDeleteRolEmpleadoUseCase:
         
         use_case = DeleteRolEmpleadoUseCase(mock_repo)
         
-        with pytest.raises(AsociacionYaExisteException):
+        with pytest.raises(RecursoEnUsoException):
             use_case.ejecutar(id_rol=1)
         
         mock_repo.eliminar.assert_not_called()

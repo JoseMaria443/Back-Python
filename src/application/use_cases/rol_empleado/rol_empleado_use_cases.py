@@ -12,7 +12,7 @@ from src.domain.ports.input.rol_empleado import (
 )
 from src.domain.ports.output.rol_empleado import RolEmpleadoRepositoryPort
 from src.domain.ports.output.empleado_rol import EmpleadoRolRepositoryPort
-from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.domain.exceptions.crud_exceptions import RecursoNoEncontradoException, RecursoEnUsoException, AsociacionYaExisteException
 
 
 class CreateRolEmpleadoUseCase(CreateRolEmpleadoInputPort):
@@ -50,7 +50,7 @@ class DeleteRolEmpleadoUseCase(DeleteRolEmpleadoInputPort):
 
     def ejecutar(self, id_rol: int) -> None:
         if self.repository.existe_asignado(id_rol):
-            raise AsociacionYaExisteException(
+            raise RecursoEnUsoException(
                 f"No se puede eliminar el rol {id_rol} porque está asignado a empleados."
             )
         if not self.repository.eliminar(id_rol):

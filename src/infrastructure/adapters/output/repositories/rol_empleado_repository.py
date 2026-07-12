@@ -1,8 +1,10 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from src.domain.entities.rol_empleado import RolEmpleado
 from src.domain.ports.output.rol_empleado import RolEmpleadoRepositoryPort
 from src.infrastructure.adapters.output.persistence.rol_empleado import RolEmpleadoORM
+from src.domain.exceptions.crud_exceptions import RecursoEnUsoException
 
 
 class RolEmpleadoRepository(RolEmpleadoRepositoryPort):
@@ -64,7 +66,13 @@ class RolEmpleadoRepository(RolEmpleadoRepositoryPort):
         if not orm:
             return False
         self.session.delete(orm)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise RecursoEnUsoException(
+                "No se puede eliminar: el registro está en uso"
+            )
         return True
 
     def existe_asignado(self, id_rol: int) -> bool:

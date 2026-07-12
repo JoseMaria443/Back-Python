@@ -21,7 +21,7 @@ class EmpleadoNoEncontradoException(DomainException):
     pass
 
 
-from .crud_exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from .crud_exceptions import RecursoNoEncontradoException, AsociacionYaExisteException, RecursoEnUsoException
 
 __all__ = [
     "DomainException",
@@ -30,4 +30,5 @@ __all__ = [
     "EmpleadoNoEncontradoException",
     "RecursoNoEncontradoException",
     "AsociacionYaExisteException",
+    "RecursoEnUsoException",
 ]

@@ -1,8 +1,10 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from src.domain.entities.catalogo import Catalogo
 from src.domain.ports.output.catalogo import CatalogoRepositoryPort
 from src.infrastructure.adapters.output.persistence.catalogo import CatalogoORM
+from src.domain.exceptions.crud_exceptions import RecursoEnUsoException
 
 
 class CatalogoRepository(CatalogoRepositoryPort):
@@ -54,7 +56,13 @@ class CatalogoRepository(CatalogoRepositoryPort):
         if not orm:
             return False
         self.session.delete(orm)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise RecursoEnUsoException(
+                "No se puede eliminar: el registro está en uso"
+            )
         return True
 
     def _orm_a_dominio(self, orm: CatalogoORM) -> Catalogo:

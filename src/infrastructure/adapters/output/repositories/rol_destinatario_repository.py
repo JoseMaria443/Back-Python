@@ -1,8 +1,10 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from src.domain.entities.rol_destinatario import RolDestinatario
 from src.domain.ports.output.rol_destinatario import RolDestinatarioRepositoryPort
 from src.infrastructure.adapters.output.persistence.rol_destinatario import RolDestinatarioORM
+from src.domain.exceptions.crud_exceptions import RecursoEnUsoException
 
 
 class RolDestinatarioRepository(RolDestinatarioRepositoryPort):
@@ -50,7 +52,13 @@ class RolDestinatarioRepository(RolDestinatarioRepositoryPort):
         if not orm:
             return False
         self.session.delete(orm)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise RecursoEnUsoException(
+                "No se puede eliminar: el registro está en uso"
+            )
         return True
 
     def _orm_a_dominio(self, orm: RolDestinatarioORM) -> RolDestinatario:

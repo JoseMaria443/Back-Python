@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
 from src.infrastructure.config.auth import get_current_empleado
-from src.domain.exceptions import RecursoNoEncontradoException
+from src.domain.exceptions import RecursoNoEncontradoException, RecursoEnUsoException
 from src.application.dtos.rol_responsable import (
     CreateRolResponsableRequest,
     UpdateRolResponsableRequest,
@@ -101,3 +101,5 @@ def eliminar(
         use_case.ejecutar(id_rol)
     except RecursoNoEncontradoException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except RecursoEnUsoException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

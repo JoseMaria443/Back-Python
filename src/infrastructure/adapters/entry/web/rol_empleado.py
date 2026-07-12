@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from src.infrastructure.config import get_db
 from src.infrastructure.config.auth import get_current_empleado
-from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException
+from src.domain.exceptions import RecursoNoEncontradoException, AsociacionYaExisteException, RecursoEnUsoException
 from src.application.dtos.rol_empleado import (
     CreateRolEmpleadoRequest,
     UpdateRolEmpleadoRequest,
@@ -97,6 +97,8 @@ def eliminar(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AsociacionYaExisteException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except RecursoEnUsoException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.post("/empleado/{id_empleado}/roles", response_model=RolEmpleadoResponse)

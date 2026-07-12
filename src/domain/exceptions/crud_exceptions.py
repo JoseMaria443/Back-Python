@@ -4,3 +4,7 @@ class RecursoNoEncontradoException(Exception):
 
 class AsociacionYaExisteException(Exception):
     pass
+
+
+class RecursoEnUsoException(Exception):
+    pass
