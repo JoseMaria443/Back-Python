@@ -107,17 +107,14 @@ def crear_empleado(
             id_cargo=request.id_cargo,
         )
         
-        # Registrar historial de alta
+        # Registrar historial de alta usando el factory
         historial_repo = HistorialEstadoEmpleadoRepository(db)
-        historial_repo.crear(
-            HistorialEstadoEmpleado(
-                id_historial=0,
-                id_empleado=empleado.id_empleado,
-                accion="alta",
-                id_empleado_ejecutor=current_empleado.get("id_empleado"),
-                fecha=None,
-            )
+        historial = HistorialEstadoEmpleado.crear(
+            id_empleado=empleado.id_empleado,
+            accion="alta",
+            id_empleado_ejecutor=current_empleado.get("id_empleado"),
         )
+        historial_repo.crear(historial)
         
         return CreateEmpleadoResponse(
             id_empleado=empleado.id_empleado,
