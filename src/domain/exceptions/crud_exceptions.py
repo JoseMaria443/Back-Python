@@ -8,3 +8,7 @@ class AsociacionYaExisteException(Exception):
 
 class RecursoEnUsoException(Exception):
     pass
+
+
+class ErrorAlmacenamientoException(Exception):
+    pass
