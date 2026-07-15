@@ -108,6 +108,7 @@
 | Método | Ruta | Auth | Request DTO | Response DTO | Status |
 |--------|------|------|-------------|--------------|--------|
 | POST | /api/archivo/ | No | CreateArchivoRequest (doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | ArchivoResponse (id_archivo: int, doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | 201, 404 |
+| POST | /api/archivo/subir | Sí | multipart/form-data: file (UploadFile), doi (str), descripcion (str), id_elaborador (int), fecha_registro (date) | ArchivoResponse (id_archivo: int, doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | 201, 400, 401, 413, 500 |
 | GET | /api/archivo/{id_archivo} | No | Path: id_archivo: int | ArchivoResponse (id_archivo: int, doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | 200, 404 |
 | GET | /api/archivo/ | No | Query params: skip: int, limit: int | ListArchivoResponse (items: list[ArchivoResponse], total: int, skip: int, limit: int) | 200 |
 | PUT | /api/archivo/{id_archivo} | No | Path: id_archivo: int, UpdateArchivoRequest (doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | ArchivoResponse (id_archivo: int, doi: str, descripcion: str, url_archivo: str, nombre_original: str, id_elaborador: int, fecha_registro: date) | 200, 404 |

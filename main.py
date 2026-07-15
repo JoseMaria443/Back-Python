@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from src.infrastructure.config.cloudinary_config import init_cloudinary
 from src.infrastructure.adapters.entry.web.empleado import router as empleado_router
 from src.infrastructure.adapters.entry.web.comunicado import router as comunicado_router
 from src.infrastructure.adapters.entry.web.tarea import router as tarea_router
@@ -20,6 +21,8 @@ app = FastAPI(
     description="API Backend con Arquitectura Hexagonal",
     version="0.1.0",
 )
+
+init_cloudinary()
 
 app.include_router(empleado_router)
 app.include_router(comunicado_router)
