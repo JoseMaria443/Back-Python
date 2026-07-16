@@ -9,7 +9,6 @@ class CloudinaryAdapter:
         try:
             resultado = cloudinary.uploader.upload(
                 contenido,
-                public_id=nombre_archivo,
                 resource_type="auto",
             )
             return resultado.get("secure_url", "")
